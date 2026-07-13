@@ -153,7 +153,28 @@ window.HBC_I18N = (function () {
     'Nyomtatható összefoglaló a kezelőorvosnak: TIR, becsült HbA1c/GMI, grafikonok és részletes napló. A megnyíló oldalon a Nyomtatás gombbal PDF-be is mentheted.':
       'Printable summary for your doctor: TIR, estimated HbA1c/GMI, charts and a detailed log. On the opened page you can also save it as PDF via the Print button.',
     'A kezdő dátum nem lehet később, mint a záró dátum!': 'The start date cannot be later than the end date!',
-    'GMI ℹ️': 'GMI ℹ️'
+    'GMI ℹ️': 'GMI ℹ️',
+    // ── v9: új funkciók szövegei ──
+    'Menü': 'Menu', 'Oldalak': 'Pages', 'Bezárás': 'Close',
+    'Gyors (bólus) inzulin': 'Rapid (bolus) insulin', 'Bázis inzulin': 'Basal insulin',
+    'Egyéb (egyéni név)…': 'Other (custom name)…', 'Egyéni név': 'Custom name',
+    'pl. Insulin lispro Sanofi': 'e.g. Insulin lispro Sanofi',
+    '🎨 Egyéni szín (színskáláról)': '🎨 Custom color (from palette)',
+    'Egyéni kiemelőszín': 'Custom accent color',
+    'Koppints a színmezőre, és válassz a felugró színskáláról!': 'Tap the color field and pick from the pop-up palette!',
+    'A riasztás csak AZNAPI mérés alapján szólal meg – régebbi (utólag rögzített) érték nem vált riasztást.':
+      'Alerts fire only for measurements taken TODAY – older (back-dated) values never trigger an alert.',
+    '⏰ Dátum és idő (alapból a mostani – utólagos rögzítéshez módosítsd!)':
+      '⏰ Date & time (defaults to now – change it for back-dated entries!)',
+    'Riasztás (hozzátartozó)': 'Alert (family member)',
+    // ── v9: nyelvi teljesség — korábban hiányzó feliratok ──
+    '📝 Jegyzetek': '📝 Notes', '➕ Nyit': '➕ Open', 'Ment': 'Save',
+    '– Válassz –': '– Choose –', '➕ Új étel mentése adatbázisba:': '➕ Save new food to database:',
+    'pl. Séta, Számítógépezés...': 'e.g. Walking, Computer time...',
+    'Nem tömb!': 'Not a list!',
+    // hónap-rövidítések a dátumformázáshoz (fmtDT/fmtAlwaysDT)
+    'jan.': 'Jan', 'feb.': 'Feb', 'már.': 'Mar', 'ápr.': 'Apr', 'máj.': 'May', 'jún.': 'Jun',
+    'júl.': 'Jul', 'aug.': 'Aug', 'szep.': 'Sep', 'okt.': 'Oct', 'nov.': 'Nov', 'dec.': 'Dec'
   };
 
   /* Mintaalapú fordítás dinamikus (számot/nevet tartalmazó) szövegekhez.

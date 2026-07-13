@@ -1,5 +1,5 @@
-/* HBC Diabétesz Napló v8.0 — Service Worker (offline működés) */
-const CACHE = 'hbc-v8.0.0';
+/* HBC Diabétesz Napló v9.0 — Service Worker (offline működés) */
+const CACHE = 'hbc-v9.0.0';
 const ASSETS = [
   './',
   './index.html',
@@ -16,6 +16,7 @@ const ASSETS = [
   './js/cgm.js',
   './js/app.js',
   './icons/logo.png',
+  './icons/TypeOneDiab_logo.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-192.png',
@@ -54,7 +55,4 @@ self.addEventListener('fetch', e => {
         caches.open(CACHE).then(c => c.put(e.request, copy));
       }
       return res;
-    }).catch(() => caches.match('./index.html')))
-  );
-});
-/* v8.0 */
+    }).catch(() => caches.match('./in

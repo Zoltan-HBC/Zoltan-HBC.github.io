@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v8.0 Personal APP
+# HBC Diabétesz Napló v9.0 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).
@@ -8,41 +8,52 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
-## Mit tud a v7-hez képest? (v8 újdonságok)
-- **Vizuális megújulás:** TypeOneDiab logó a fejlécben és az app-ikonokban,
-  egységes SVG ikonkészlet az emoji-ikonok helyett
-- **Alsó navigációs sáv mobilon** (asztali gépen marad a felső fülsor),
-  nagyobb érintőfelületek, fókusz-jelzés, sötét módú kontraszt-javítás (WCAG AA)
-- **Orvosi riport (PDF):** a Statisztika fülön szabad „-tól -ig" dátumtartományra
-  nyomtatható összefoglaló — TIR, becsült HbA1c, GMI, SD/CV, grafikonok,
-  napi mintázat és részletes napló; magyarul és angolul, mmol/l és mg/dl egységgel
-- **GMI (Glucose Management Indicator)** a Statisztikában a becsült HbA1c mellett
-- **Napi mintázat grafikon:** óránkénti átlag/min/max a kiválasztott időszakra
-- **Beállítható napszakhatárok:** az étkezéstípus-alapértelmezés (Reggeli…Utóvacsora)
-  és a bolus-ICR napszakainak órahatárai a Beállításokban módosíthatók
-- **Elgépelés-védelem:** szokatlan vércukorérték (2,0 alatt / 25,0 mmol/l felett)
-  mentése előtt megerősítő kérdés
-- Grafikonok, Bejegyzések és Statisztika: egyéni „-tól -ig" dátumtartomány mindenhol
-- **Hibajavítás:** a heti TIR-kártya változósorrend-hibája (v7 TDZ) javítva;
-  a bejegyzés-kártyák a beállított inzulinneveket mutatják
-- A v7 minden funkciója változatlanul megmaradt: kétnyelvűség, mértékegység-váltó,
-  Drive-szinkron + követő mód, riasztások, ICR/IOB bolus-javaslat, CGM-import,
-  IndexedDB tartalék, JSON/CSV import-export
-- **Adatkompatibilitás:** a v6/v7 adatok automatikusan, veszteség nélkül betöltődnek
+## Mit tud a v8-hoz képest? (v9 újdonságok)
+- **Sérült v8-fájlok helyreállítva:** az app.js, i18n.js és README.md a v8-as
+  csomagban csonkolódott (hibás másolás) — a v9 teljes, működő kód
+- **TypeOneDiab logó:** asztali nézetben +20%-kal nagyobb, és a képernyő
+  szélességével automatikusan skálázódik; mobilon a fejlécben rendelkezésre
+  álló helyhez igazodik
+- **Asztali felső sáv:** minden oldalválasztó és beállítás gomb minden oldalon
+  látható (ahogy a v7-ben volt) — SVG ikonokkal
+- **Mobil navigáció:** ÚJ hamburger menü a fejlécben (minden oldal elérhető) +
+  alsó navigációs sáv a leggyakoribb oldalakkal — beteg, hozzátartozó és orvos
+  is könnyen válthat az oldalak (Statisztika, Grafikonok, Bejegyzések…) között
+- **Inzulin-legördülők:** a Magyarországon elérhető gyors (bólus) inzulinok
+  (Humalog, NovoRapid, Fiasp, Apidra, Lyumjev, Actrapid…) és bázisinzulinok
+  (Lantus, Abasaglar, Toujeo, Levemir, Tresiba, Semglee…) listából választhatók,
+  egyéni név továbbra is megadható
+- **Egyéni színválasztó:** a Sötét / Világos / Automatikus megjelenés mellett
+  az app kiemelőszíne felugró színskálán is kiválasztható (Beállítások → Színtéma
+  → 🎨 Egyéni szín)
+- **Riasztás csak aznapi értékre:** a hozzátartozói (követő) riasztás kizárólag
+  az AZNAPI, legfrissebb mérés alapján szólal meg — utólag rögzített, régebbi
+  érték nem vált riasztást; a megosztott adatcsomag a CGM-méréseket is tartalmazza
+- **Adatfelvitel:** a dátum + idő mező alapból az aktuális időpont, de szabadon
+  módosítható — utólagos (visszadátumozott) rögzítéshez is
+- **Nyelvi teljesség:** minden felirat magyarul ÉS angolul is megjelenik
+  a kiválasztott nyelvnek megfelelően
+- A v8 minden funkciója megmaradt: orvosi riport (PDF), GMI, napi mintázat
+  grafikon, beállítható napszakhatárok, elgépelés-védelem, alsó navigáció
+- **Adatkompatibilitás:** a v6/v7/v8 adatok automatikusan, veszteség nélkül betöltődnek
 
 ## Fájlszerkezet
 ```
 index.html          — az app váza
-manifest.json, sw.js — telepíthetőség + offline működés
-js/app.js           — a teljes alkalmazás (React)
-js/i18n.js          — fordítás + mértékegység-kezelés
-js/storage.js       — tartós tárolás (IndexedDB)
+manifest.json       — telepítési adatok (PWA)
+sw.js               — service worker (offline működés)
+css/                — stílusok (Tailwind + egyéni)
+js/i18n.js          — kétnyelvűség + mértékegység-kezelés
+js/storage.js       — IndexedDB tartalék-mentés
 js/sync.js          — Google Drive szinkron + riasztások
-js/cgm.js           — CGM-import + illesztőréteg
-css/, lib/, fonts/, icons/ — helyi erőforrások (offline)
+js/cgm.js           — CGM CSV-import (LibreView/Dexcom)
+js/app.js           — maga az alkalmazás (React)
+lib/                — React + Chart.js (helyben, CDN nélkül)
+fonts/              — Nunito betűtípus (offline)
+icons/              — app-ikonok + TypeOneDiab logó
 store/              — Google Play anyagok
 ```
 
-⚠️ Az alkalmazás nem orvostechnikai eszköz. Minden dózisjavaslat és becsült érték
-(HbA1c, GMI, TIR) tájékoztató jellegű — a döntés mindig a kezelőorvos
-iránymutatása szerint történjen!
+## Fontos
+⚠️ Minden dózisérték csak tájékoztató javaslat, NEM orvosi utasítás!
+A kezelésről mindig a kezelőorvos iránymutatása szerint dönts!

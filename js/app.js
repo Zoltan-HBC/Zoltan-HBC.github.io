@@ -54,7 +54,8 @@ const ICON_PATHS={
   pencil:'M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z',
   trash:'M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6',
   x:'M18 6L6 18M6 6l12 12',
-  printer:'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6v-8z'
+  printer:'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6v-8z',
+  menu:'M3 6h18M3 12h18M3 18h18' /* v9: hamburger menü ikon */
 };
 function Icon({name,size=20,cls='',sw=2}){
   return __ce('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',
@@ -91,13 +92,15 @@ function fmtDT(ts){
   if(!ts)return'';
   const d=ts.slice(0,10).split('-');
   const M=['jan.','feb.','már.','ápr.','máj.','jún.','júl.','aug.','szep.','okt.','nov.','dec.'];
-  return parseInt(d[2])+'. '+M[parseInt(d[1])-1]+' '+(ts.length>=16?ts.slice(11,16):'');
+  /* v9: a hónapnév a kiválasztott nyelven jelenik meg */
+  return parseInt(d[2])+'. '+window.t(M[parseInt(d[1])-1])+' '+(ts.length>=16?ts.slice(11,16):'');
 }
 function fmtAlwaysDT(ts){
   if(!ts)return'';
   const d=ts.slice(0,10).split('-');
   const M=['jan.','feb.','már.','ápr.','máj.','jún.','júl.','aug.','szep.','okt.','nov.','dec.'];
-  return d[0]+'. '+M[parseInt(d[1])-1]+' '+parseInt(d[2])+'. – '+(ts.length>=16?ts.slice(11,16):'');
+  /* v9: a hónapnév a kiválasztott nyelven jelenik meg */
+  return d[0]+'. '+window.t(M[parseInt(d[1])-1])+' '+parseInt(d[2])+'. – '+(ts.length>=16?ts.slice(11,16):'');
 }
 function sortedByTS(arr){return[...arr].sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));}
 function filterRange(entries,from,to){return entries.filter(e=>{const d=getDate(e.timestamp);return d>=from&&d<=to;});}
@@ -882,7 +885,7 @@ function AddEntry({onSave,onCancel,allFoods,onAddFood,entries,settings,showAlert
     ),
     h('form',{onSubmit:submit,className:'space-y-4'},
       h('div',{className:'grid grid-cols-2 gap-3'},
-        h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'⏰ Időpont'),
+        h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'⏰ Időpont (utólag is módosítható!)'),
           h('input',{type:'datetime-local',value:form.timestamp,onChange:e=>setForm({...form,timestamp:e.target.value}),required:true,className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'})),
         h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'📝 Típus'),
           h('select',{value:form.type,onChange:e=>setForm({...form,type:e.target.value}),className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'},
@@ -1138,7 +1141,9 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
               className:'w-20 border-2 border-purple-200 rounded-xl px-2 py-1 text-sm'})),
           h('p',{className:'text-[11px] text-purple-500'},window.HBC_I18N.getLang()==='en'
             ?'Note: alerts appear while the app is open or running in the background. Push to a fully closed app would require a central server (prepared for a future upgrade).'
-            :'Megjegyzés: a riasztás nyitott vagy háttérben futó app mellett érkezik. Teljesen bezárt apphoz központi szerver kellene (előkészítve egy későbbi bővítéshez).')
+            :'Megjegyzés: a riasztás nyitott vagy háttérben futó app mellett érkezik. Teljesen bezárt apphoz központi szerver kellene (előkészítve egy későbbi bővítéshez).'),
+          /* v9: csak aznapi mérés riaszt */
+          h('p',{className:'text-[11px] font-bold text-purple-600'},'A riasztás csak AZNAPI mérés alapján szólal meg – régebbi (utólag rögzített) érték nem vált riasztást.')
         )
       )
     ]),
@@ -1242,6 +1247,25 @@ function Settings({settings,onSave}){
     h('input',{type:'number',step:s.bgUnit==='mgdl'?'1':'0.1',value:dispOf(s[key]),
       onChange:e=>{const v=storeOf(e.target.value);setS({...s,[key]:v==null?DEFAULT_SETTINGS[key]:v});},className:fi})
   );
+  /* v9: inzulinválasztó legördülő — piacon lévő készítmények + egyéni név */
+  const insSel=(label,key,list,cls)=>{
+    const cur=s[key]!=null?s[key]:list[0];
+    const isCustom=!list.includes(cur);
+    return h('div',null,
+      h('label',{className:'text-sm font-bold '+cls+' block mb-1'},label),
+      h('select',{value:isCustom?'_custom':cur,
+        onChange:e=>{const v=e.target.value;setS(v==='_custom'?{...s,[key]:''}:{...s,[key]:v});},className:fi},
+        list.map(n=>h('option',{key:n,value:n},n)),
+        h('option',{value:'_custom'},window.t('Egyéb (egyéni név)…'))),
+      isCustom&&h('input',{type:'text',value:cur,placeholder:'pl. Insulin lispro Sanofi',
+        onChange:e=>setS({...s,[key]:e.target.value}),className:fi+' mt-2'})
+    );
+  };
+  /* v8/v9: napszakhatár-mező (óra, 0–23) */
+  const hourField=(label,key,def)=>h('div',null,
+    h('label',{className:'text-xs font-bold text-gray-500 block mb-1'},label),
+    h('input',{type:'number',min:'0',max:'23',step:'1',value:s[key]!=null?s[key]:def,
+      onChange:e=>{const v=parseInt(e.target.value);setS({...s,[key]:isNaN(v)?def:Math.max(0,Math.min(23,v))});},className:fi}));
   return h('div',{className:'space-y-4'},
     card([
       h('h2',{className:'font-black text-gray-800 mb-3'},'⚙️ Személyes beállítások'),
@@ -1266,7 +1290,14 @@ function Settings({settings,onSave}){
           h('select',{value:s.theme||'indigo',onChange:e=>setS({...s,theme:e.target.value}),className:fi},
             h('option',{value:'indigo'},'💜 Indigó (alap)'),
             h('option',{value:'teal'},'💚 Türkiz'),
-            h('option',{value:'rose'},'🌹 Rózsa'))
+            h('option',{value:'rose'},'🌹 Rózsa'),
+            /* v9: egyéni szín felugró színskáláról */
+            h('option',{value:'custom'},'🎨 Egyéni szín (színskáláról)')),
+          s.theme==='custom'&&h('div',{className:'mt-2 flex items-center gap-3'},
+            h('input',{type:'color',value:s.customC1||'#4f46e5',
+              onChange:e=>setS({...s,customC1:e.target.value}),
+              className:'hbc-colorpick',title:'Egyéni kiemelőszín'}),
+            h('span',{className:'text-xs text-gray-500'},'Koppints a színmezőre, és válassz a felugró színskáláról!'))
         ),
         h('div',null,
           h('label',{className:'text-sm font-bold text-indigo-700 block mb-1'},'Megjelenés'),
@@ -1292,38 +1323,12 @@ function Settings({settings,onSave}){
         bgField('🎯 Célvércukor – bolus korrektorhoz','targetBG','text-green-700')
       )
     ]),
-    /* v8: felhasználó által módosítható napszakhatárok */
-    card([
-      h('h2',{className:'font-black text-gray-800 mb-1'},'🕒 Napszakhatárok'),
-      h('p',{className:'text-sm text-gray-500 mb-3'},'Óra (0–23), ameddig az adott napszak tart. Ezek vezérlik az étkezéstípus-alapértelmezést és a bolus-kalkulátor napszakválasztását.'),
-      h('p',{className:'text-xs font-bold text-emerald-700 mb-2'},'🍽️ Étkezés-alapértelmezés határai'),
-      h('div',{className:'grid grid-cols-2 md:grid-cols-5 gap-3 mb-4'},
-        [['mb1','Reggeli eddig',9],['mb2','Tízórai eddig',11],['mb3','Ebéd eddig',14],['mb4','Uzsonna eddig',17],['mb5','Vacsora eddig',21]].map(([k,l,d])=>
-          h('div',{key:k},h('label',{className:'text-xs font-bold text-gray-500 block mb-1'},t(l)+' (h)'),
-            h('input',{type:'number',min:'0',max:'23',step:'1',value:s[k]!=null?s[k]:d,
-              onChange:e=>{const v=parseInt(e.target.value);setS({...s,[k]:isNaN(v)?d:Math.max(0,Math.min(23,v))});},className:fi})))
-      ),
-      h('p',{className:'text-xs text-gray-400 mb-3'},'A Vacsora-határ után rögzített étkezés alapértelmezése: Utóvacsora.'),
-      h('p',{className:'text-xs font-bold text-indigo-700 mb-2'},'💉 Bolus-ICR napszakhatárai'),
-      h('div',{className:'grid grid-cols-2 gap-3'},
-        [['ib1','Reggel eddig',10],['ib2','Délben eddig',16]].map(([k,l,d])=>
-          h('div',{key:k},h('label',{className:'text-xs font-bold text-gray-500 block mb-1'},t(l)+' (h)'),
-            h('input',{type:'number',min:'0',max:'23',step:'1',value:s[k]!=null?s[k]:d,
-              onChange:e=>{const v=parseInt(e.target.value);setS({...s,[k]:isNaN(v)?d:Math.max(0,Math.min(23,v))});},className:fi})))
-      ),
-      h('p',{className:'text-xs text-gray-400 mt-2'},'A Délben-határ után az „Este" ICR érvényes.')
-    ]),
     card([
       h('h2',{className:'font-black text-gray-800 mb-1'},'💉 Inzulin-beállítások'),
       h('div',{className:'grid md:grid-cols-3 gap-4 mb-4'},
-        h('div',null,
-          h('label',{className:'text-sm font-bold text-indigo-700 block mb-1'},'Gyors inzulin neve'),
-          h('input',{type:'text',value:s.rapidName||'Humalog',onChange:e=>setS({...s,rapidName:e.target.value}),className:fi})
-        ),
-        h('div',null,
-          h('label',{className:'text-sm font-bold text-purple-700 block mb-1'},'Bázis inzulin neve'),
-          h('input',{type:'text',value:s.basalName||'Lantus',onChange:e=>setS({...s,basalName:e.target.value}),className:fi})
-        ),
+        /* v9: a piacon lévő gyors és bázis inzulinok legördülő menüből választhatók */
+        insSel('Gyors (bólus) inzulin','rapidName',RAPID_INSULINS,'text-indigo-700'),
+        insSel('Bázis inzulin','basalName',BASAL_INSULINS,'text-purple-700'),
         h('div',null,
           h('label',{className:'text-sm font-bold text-indigo-700 block mb-1'},'Inzulin hatásideje (óra)'),
           h('input',{type:'number',step:'0.5',min:'2',max:'8',value:s.diaHours||4,
@@ -1353,12 +1358,62 @@ function Settings({settings,onSave}){
       h('div',{className:'mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200'},
         h('p',{className:'text-xs font-bold text-amber-800 mb-1'},'⚠️ Fontos figyelmeztetés!'),
         h('p',{className:'text-xs text-amber-700'},'⚠️ FIGYELEM: minden dózisérték csak tájékoztató javaslat, NEM orvosi utasítás! A dózisról mindig a kezelőorvosod iránymutatása szerint dönts!')
+      )
+    ]),
+    /* v8 (v9-ben helyreállítva): felhasználó által módosítható napszakhatárok */
+    card([
+      h('h2',{className:'font-black text-gray-800 mb-1'},'🕒 Napszakhatárok'),
+      h('p',{className:'text-xs text-gray-500 mb-3'},'Óra (0–23), ameddig az adott napszak tart. Ezek vezérlik az étkezéstípus-alapértelmezést és a bolus-kalkulátor napszakválasztását.'),
+      h('p',{className:'text-sm font-bold text-emerald-700 mb-2'},'🍽️ Étkezés-alapértelmezés határai'),
+      h('div',{className:'grid grid-cols-2 md:grid-cols-5 gap-3'},
+        hourField('Reggeli eddig','mb1',9),
+        hourField('Tízórai eddig','mb2',11),
+        hourField('Ebéd eddig','mb3',14),
+        hourField('Uzsonna eddig','mb4',17),
+        hourField('Vacsora eddig','mb5',21)
       ),
-      h('button',{onClick:()=>onSave(s),
-        className:'mt-4 w-full font-black text-white py-3 rounded-2xl shadow-lg',
-        style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'✅ Beállítások mentése')
-    ])
+      h('p',{className:'text-xs text-gray-400 mt-1 mb-3'},'A Vacsora-határ után rögzített étkezés alapértelmezése: Utóvacsora.'),
+      h('p',{className:'text-sm font-bold text-purple-700 mb-2'},'💉 Bolus-ICR napszakhatárai'),
+      h('div',{className:'grid grid-cols-2 gap-3'},
+        hourField('Reggel eddig','ib1',10),
+        hourField('Délben eddig','ib2',16)
+      ),
+      h('p',{className:'text-xs text-gray-400 mt-1'},'A Délben-határ után az „Este" ICR érvényes.')
+    ]),
+    h('button',{onClick:()=>onSave(s),
+      className:'w-full font-black text-white py-3 rounded-2xl shadow-lg',
+      style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'✅ Beállítások mentése')
   );
+}
+
+/* ═══════════ v9: MAGYARORSZÁGON ELÉRHETŐ INZULINOK (legördülő listákhoz) ═══════════
+   A lista tájékoztató jellegű – az „Egyéb (egyéni név)…" opcióval bármilyen
+   készítménynév megadható. A kezelést mindig az orvos határozza meg! */
+const RAPID_INSULINS=['Humalog','NovoRapid','Fiasp','Apidra','Lyumjev','Actrapid','Insulin lispro Sanofi'];
+const BASAL_INSULINS=['Lantus','Abasaglar','Toujeo','Levemir','Tresiba','Semglee','Insulatard','Humulin N'];
+
+/* v9: egyéni téma – a kiemelőszín második árnyalata (color-picker mellé) */
+function shiftHue(hex,deg){
+  try{
+    const n=parseInt(hex.slice(1),16);
+    let r=(n>>16&255)/255,g=(n>>8&255)/255,b=(n&255)/255;
+    const max=Math.max(r,g,b),min=Math.min(r,g,b);
+    let h0=0,s0=0;const l=(max+min)/2;
+    if(max!==min){
+      const d=max-min;
+      s0=l>0.5?d/(2-max-min):d/(max+min);
+      switch(max){case r:h0=(g-b)/d+(g<b?6:0);break;case g:h0=(b-r)/d+2;break;default:h0=(r-g)/d+4;}
+      h0/=6;
+    }
+    h0=(h0+deg/360)%1;if(h0<0)h0+=1;
+    const hue2rgb=(p,q,t2)=>{if(t2<0)t2+=1;if(t2>1)t2-=1;if(t2<1/6)return p+(q-p)*6*t2;if(t2<1/2)return q;if(t2<2/3)return p+(q-p)*(2/3-t2)*6;return p;};
+    let r2,g2,b2;
+    if(s0===0){r2=g2=b2=l;}
+    else{const q=l<0.5?l*(1+s0):l+s0-l*s0;const p=2*l-q;
+      r2=hue2rgb(p,q,h0+1/3);g2=hue2rgb(p,q,h0);b2=hue2rgb(p,q,h0-1/3);}
+    const to=x=>Math.round(x*255).toString(16).padStart(2,'0');
+    return '#'+to(r2)+to(g2)+to(b2);
+  }catch(e){return hex;}
 }
 
 function App(){
@@ -1370,6 +1425,7 @@ function App(){
   const [modal,setModal]=useState(null);
   const [followerData,setFollowerData]=useState(null); /* v7: követő mód adatai */
   const [toast,setToast]=useState(null); /* v7 UX: rövid pozitív visszajelzés */
+  const [menuOpen,setMenuOpen]=useState(false); /* v9: mobil hamburger menü */
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),3000);};
   const followerMode=window.HBC_SYNC&&window.HBC_SYNC.cfg.mode==='follower';
 
@@ -1395,12 +1451,13 @@ function App(){
     }
   },[]);
 
-  /* v7: nyelv, mértékegység, téma azonnali alkalmazása */
+  /* v7: nyelv, mértékegység, téma azonnali alkalmazása; v9: egyéni szín */
   useEffect(()=>{
     if(settings.lang)window.HBC_I18N.setLang(settings.lang);
     window.bgU.setUnit(settings.bgUnit||'mmol');
     const themes={indigo:['#4f46e5','#7c3aed'],teal:['#0d9488','#0891b2'],rose:['#e11d48','#db2777']};
-    const tc=themes[settings.theme]||themes.indigo;
+    let tc=themes[settings.theme]||themes.indigo;
+    if(settings.theme==='custom'&&settings.customC1)tc=[settings.customC1,shiftHue(settings.customC1,28)];
     document.documentElement.style.setProperty('--hbc-c1',tc[0]);
     document.documentElement.style.setProperty('--hbc-c2',tc[1]);
     /* v7.1: sötét mód (kapcsolt vagy rendszerkövető) */
@@ -1415,7 +1472,10 @@ function App(){
     }
   },[settings]);
 
-  const drivePush=(en,fo,se)=>{if(window.HBC_SYNC)window.HBC_SYNC.push({entries:en,foods:fo,settings:se});};
+  /* v9: a CGM-mérések is a megosztott csomag részei → a hozzátartozói riasztás
+     mindig a legfrissebb AZNAPI értéken alapul */
+  const drivePush=(en,fo,se)=>{if(window.HBC_SYNC)window.HBC_SYNC.push({entries:en,foods:fo,settings:se,
+    cgm:(window.HBC_CGM?window.HBC_CGM.getRange(subD(1),todayStr()):[])});};
   const saveEntries=useCallback(arr=>{setEntries(arr);localStorage.setItem('hbc-v5-entries',JSON.stringify(arr));drivePush(arr,allFoods,settings);},[allFoods,settings]);
   const saveFoods=useCallback(arr=>{setAllFoods(arr);localStorage.setItem('hbc-v5-foods',JSON.stringify(arr));drivePush(entries,arr,settings);},[entries,settings]);
   const saveSettings=s=>{setSettings(s);localStorage.setItem('hbc-v5-settings',JSON.stringify(s));drivePush(entries,allFoods,s);showAlert('✅ Beállítások mentve!');};
@@ -1423,10 +1483,12 @@ function App(){
   const addEntry=e=>{
     const arr=[{...e,id:Date.now()},...entries];
     saveEntries(arr);setView('dashboard');
-    /* v7: hipo-figyelmeztetés rögzítéskor */
     const low=settings.lowBG!=null?settings.lowBG:3.9;
     const high=settings.highBG!=null?settings.highBG:10.0;
-    if(e.bloodGlucose&&parseFloat(e.bloodGlucose)<low){
+    /* v9: hipo-figyelmeztetés CSAK aznapi mérésre — utólag rögzített (régebbi)
+       érték nem vált riasztást */
+    const isToday=getDate(e.timestamp)===todayStr();
+    if(e.bloodGlucose&&parseFloat(e.bloodGlucose)<low&&isToday){
       setTimeout(()=>showAlert('🚨 ALACSONY VÉRCUKOR! Egyél 15 g gyorsan felszívódó szénhidrátot (pl. szőlőcukor, gyümölcslé), és 15 perc múlva mérj újra!'),150);
     }else if(settings.motivation!==false){
       /* v7 UX (Reciprocity): azonnali pozitív visszajelzés */
@@ -1449,10 +1511,10 @@ function App(){
     const csv=[['Időpont','Típus','Vércukor ('+window.bgU.label()+')','CH (g)',(settings.rapidName||'Humalog')+' (E)',(settings.basalName||'Lantus')+' (E)','Jegyzetek'].join(','),
       ...s.map(e=>[new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()),e.type||'',e.bloodGlucose?window.bgU.disp(e.bloodGlucose):'',e.carbs||'',e.insulinRapid||'',e.insulinLong||'',`"${(e.notes||'').replace(/"/g,'""')}"`].join(','))
     ].join('\n');
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v8_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v9_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
   };
   const importJSON=txt=>{
-    try{let arr=JSON.parse(txt);if(arr&&!Array.isArray(arr)&&Array.isArray(arr.entries))arr=arr.entries;if(!Array.isArray(arr))throw new Error('Nem tömb!');const ids=new Set(entries.map(e=>e.id));const newOnes=arr.filter(e=>!ids.has(e.id));saveEntries([...entries,...newOnes]);showAlert(`✅ ${newOnes.length} új bejegyzés importálva.`);}catch(err){showAlert('❌ Hiba: '+err.message);}
+    try{let arr=JSON.parse(txt);if(arr&&!Array.isArray(arr)&&Array.isArray(arr.entries))arr=arr.entries;if(!Array.isArray(arr))throw new Error(window.t('Nem tömb!'));const ids=new Set(entries.map(e=>e.id));const newOnes=arr.filter(e=>!ids.has(e.id));saveEntries([...entries,...newOnes]);showAlert(`✅ ${newOnes.length} új bejegyzés importálva.`);}catch(err){showAlert('❌ Hiba: '+err.message);}
   };
   const importCSV=txt=>{
     try{
@@ -1472,7 +1534,6 @@ function App(){
   const effEntries=(followerMode&&followerData&&Array.isArray(followerData.entries))?followerData.entries:entries;
   const effSettings=(followerMode&&followerData&&followerData.settings)?{...DEFAULT_SETTINGS,...followerData.settings,bgUnit:settings.bgUnit,lang:settings.lang}:settings;
 
-  /* v8: SVG ikonok a füleken */
   const tabs=[
     {id:'dashboard',ic:'home',f:'Áttekintés'},
     {id:'charts',ic:'chart',f:'Grafikonok'},
@@ -1483,28 +1544,51 @@ function App(){
     {id:'settings',ic:'gear',f:'Beállítások'},
   ];
   const visTabs=tabs.filter(tb=>!(followerMode&&(tb.id==='foods')));
+  const go=id=>{setView(id);setMenuOpen(false);};
 
   return h('div',{className:'min-h-screen',style:{background:'linear-gradient(160deg,#eef2ff,#f5f3ff)'}},
-    // Header
+    // ═══ Fejléc: v9 — TypeOneDiab logó + hamburger (mobil) ═══
     h('div',{className:'bg-white/80 backdrop-blur-md shadow sticky top-0 z-50 border-b border-indigo-100'},
-      h('div',{className:'max-w-5xl mx-auto px-3 py-3 flex items-center justify-between'},
-        h('div',{className:'flex items-center gap-2.5'},
-          /* v8: TypeOneDiab logó az emoji helyett */
-          h('img',{src:'icons/logo.png',alt:'Type 1 Diabetes',className:'w-10 h-10 md:w-11 md:h-11 rounded-xl object-contain bg-white shadow-sm border border-indigo-100'}),
-          h('div',null,
-            h('h1',{className:'text-lg md:text-2xl font-black',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},'HBC Diabétesz Napló'),
-            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v8.0 Personal APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
+      h('div',{className:'max-w-5xl mx-auto px-3 py-2 flex items-center justify-between gap-2'},
+        h('div',{className:'flex items-center gap-2 md:gap-3 min-w-0'},
+          h('img',{src:'icons/TypeOneDiab_logo.png',alt:'TypeOneDiab logo',className:'hbc-logo'}),
+          h('div',{className:'min-w-0'},
+            h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},'HBC Diabétesz Napló'),
+            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v9.0 Personal APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
           )
         ),
-        !followerMode&&h('button',{onClick:()=>setView('add'),type:'button',className:'font-bold text-white px-4 py-2.5 rounded-xl text-sm shadow-lg inline-flex items-center gap-1.5 min-h-[44px]',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},h(Icon,{name:'plus',size:16,sw:3}),'Új')
+        h('div',{className:'flex items-center gap-2 shrink-0'},
+          !followerMode&&h('button',{onClick:()=>setView('add'),type:'button',className:'hidden md:block font-bold text-white px-4 py-2 rounded-xl text-sm shadow-lg',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'➕ Új'),
+          /* v9: hamburger menü — csak mobilon */
+          h('button',{onClick:()=>setMenuOpen(o=>!o),type:'button','aria-label':window.t('Menü'),
+            className:'md:hidden p-2 rounded-xl '+(menuOpen?'ta':'ti')},
+            h(Icon,{name:menuOpen?'x':'menu',size:24}))
+        )
       )
     ),
-    // Tabs — v8: asztali nézetben felül, mobilon alsó navigációs sáv
-    h('div',{className:'hidden md:block bg-white/75 backdrop-blur-md border-b border-indigo-100 sticky top-[60px] z-40'},
+    // ═══ Asztali nézet: minden oldalválasztó gomb a felső sávban (v7 szerint) ═══
+    h('div',{className:'hidden md:block bg-white/75 backdrop-blur-md border-b border-indigo-100 sticky top-[64px] z-40'},
       h('div',{className:'max-w-5xl mx-auto px-2 py-2 flex gap-1 overflow-x-auto'},
-        visTabs.map(tb=>h('button',{key:tb.id,onClick:()=>setView(tb.id),type:'button',className:`px-3 py-2 rounded-xl font-bold whitespace-nowrap text-xs transition-all inline-flex items-center gap-1.5 min-h-[40px] ${view===tb.id?'ta':'ti hover:bg-indigo-100'}`},
+        visTabs.map(tb=>h('button',{key:tb.id,onClick:()=>go(tb.id),type:'button',
+          className:`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold whitespace-nowrap text-xs transition-all ${view===tb.id?'ta':'ti hover:bg-indigo-100'}`},
           h(Icon,{name:tb.ic,size:15}),window.t(tb.f)
         ))
+      )
+    ),
+    // ═══ v9: mobil hamburger menü — minden oldal elérhető ═══
+    menuOpen&&h('div',{className:'md:hidden fixed inset-0 z-[95] bg-black/40',
+      onClick:e=>{if(e.target===e.currentTarget)setMenuOpen(false);}},
+      h('div',{className:'hbc-menu'},
+        h('p',{className:'text-xs font-black text-gray-400 uppercase tracking-wide mb-2'},'Oldalak'),
+        h('div',{className:'grid grid-cols-2 gap-2'},
+          visTabs.map(tb=>h('button',{key:tb.id,onClick:()=>go(tb.id),type:'button',
+            className:`flex items-center gap-2 px-3 py-3 rounded-xl font-bold text-sm ${view===tb.id?'ta':'ti'}`},
+            h(Icon,{name:tb.ic,size:18}),window.t(tb.f)
+          ))
+        ),
+        !followerMode&&h('button',{onClick:()=>go('add'),type:'button',
+          className:'mt-3 w-full font-black text-white py-3 rounded-2xl shadow-lg',
+          style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'➕ Új bejegyzés')
       )
     ),
     // v7: követő mód sáv
@@ -1514,8 +1598,8 @@ function App(){
         h('button',{onClick:()=>window.HBC_SYNC.pull(),className:'px-3 py-1 rounded-lg bg-purple-600 text-white'},window.t('Szinkron most'))
       )
     ),
-    // Content (v8: alul hely az alsó navigációs sávnak mobilon)
-    h('div',{className:'max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-6 pb-24 md:pb-6'},
+    // Tartalom (mobilon alul hely az alsó navigációs sávnak)
+    h('div',{className:'max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-6 pb-28 md:pb-6'},
       view==='dashboard'&&h(Dashboard,{entries:effEntries,onEdit:followerMode?()=>{}:setEditingEntry,onDelete:followerMode?()=>{}:deleteEntry,settings:effSettings,onAdd:followerMode?null:()=>setView('add')}),
       view==='charts'&&h(Charts,{entries:effEntries,settings:effSettings}),
       view==='add'&&!followerMode&&h(AddEntry,{onSave:addEntry,onCancel:()=>setView('dashboard'),allFoods,onAddFood:addFood,entries,settings,showAlert,showConfirm}),
@@ -1525,15 +1609,19 @@ function App(){
       view==='sync'&&h(SyncManager,{entries,saveEntries,exportCSV,importJSON,importCSV,showAlert,settings,allFoods}),
       view==='settings'&&h(Settings,{settings,onSave:saveSettings})
     ),
-    /* v8: alsó navigációs sáv (csak mobilon) */
-    h('nav',{className:'md:hidden fixed bottom-0 inset-x-0 z-50 bnav',role:'navigation','aria-label':'Fő navigáció'},
-      h('div',{className:'grid',style:{gridTemplateColumns:`repeat(${visTabs.length},1fr)`}},
-        visTabs.map(tb=>h('button',{key:tb.id,onClick:()=>setView(tb.id),type:'button',
-          className:`flex flex-col items-center justify-center gap-0.5 py-1.5 min-h-[52px] ${view===tb.id?'bnav-a':'bnav-i'}`,
-          'aria-current':view===tb.id?'page':undefined},
-          h(Icon,{name:tb.ic,size:21,sw:view===tb.id?2.5:2}),
-          h('span',{className:'text-[9.5px] font-bold leading-none'},window.t(tb.f))
-        ))
+    // ═══ v8/v9: alsó navigációs sáv — csak mobilon, a leggyakoribb oldalak ═══
+    h('div',{className:'md:hidden bnav fixed bottom-0 left-0 right-0 z-50'},
+      h('div',{className:'flex items-stretch justify-around px-1 py-1.5'},
+        [{id:'dashboard',ic:'home',f:'Áttekintés'},
+         {id:'charts',ic:'chart',f:'Grafikonok'},
+         !followerMode?{id:'add',ic:'plus',f:'Új'}:null,
+         {id:'entries',ic:'list',f:'Bejegyzések'},
+         {id:'stats',ic:'pie',f:'Statisztika'}].filter(Boolean).map(tb=>
+          h('button',{key:tb.id,onClick:()=>go(tb.id),type:'button',
+            className:'flex flex-col items-center gap-0.5 px-2 py-1 flex-1 '+(view===tb.id?'bnav-a':'bnav-i')},
+            h(Icon,{name:tb.ic,size:tb.id==='add'?24:20,sw:tb.id==='add'?2.5:2}),
+            h('span',{className:'text-[10px] font-bold leading-none'},window.t(tb.f))
+          ))
       )
     ),
     editingEntry&&h(EditModal,{entry:editingEntry,onSave:updateEntry,onCancel:()=>setEditingEntry(null),settings,showConfirm}),
@@ -1544,4 +1632,3 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(h(App,null));
-

@@ -15,6 +15,28 @@ input[type=date],input[type=datetime-local]{color-scheme:light}
 .chart-container{position:relative;height:260px;width:100%}
 @media(min-width:768px){.chart-container{height:360px}}
 
+/* ═══════════ v9 — TypeOneDiab LOGÓ ═══════════
+   Mobil: a max. méret a fejlécben rendelkezésre álló helyhez igazodik.
+   Asztali: alapból +20% (48px → 58px), és a képernyőszélességgel
+   automatikusan skálázódik (clamp: 58–76px). */
+.hbc-logo{height:clamp(38px,11vw,48px);width:auto;max-width:34vw;object-fit:contain;
+  border-radius:12px;flex-shrink:0}
+@media(min-width:768px){.hbc-logo{height:clamp(58px,5.5vw,76px);max-width:none}}
+[data-hbc-dark] .hbc-logo{background:#fff;padding:2px}
+
+/* ═══════════ v9 — MOBIL HAMBURGER MENÜ ═══════════ */
+.hbc-menu{background:rgba(255,255,255,.98);backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);border-radius:0 0 24px 24px;
+  box-shadow:0 12px 32px rgba(79,70,229,.25);padding:14px 14px 18px;
+  animation:hbcMenuIn .18s ease-out}
+@keyframes hbcMenuIn{from{transform:translateY(-8px);opacity:0}to{transform:translateY(0);opacity:1}}
+[data-hbc-dark] .hbc-menu{background:rgba(24,20,40,.98)}
+
+/* ═══════════ v9 — EGYÉNI SZÍNVÁLASZTÓ (felugró színskála) ═══════════ */
+.hbc-colorpick{width:56px;height:40px;padding:2px;border:2px solid #c7d2fe;
+  border-radius:12px;background:#fff;cursor:pointer}
+[data-hbc-dark] .hbc-colorpick{background:#1d1930;border-color:#332c52}
+
 /* ═══════════ v8 — ALSÓ NAVIGÁCIÓS SÁV (mobil) ═══════════ */
 .bnav{background:rgba(255,255,255,.93);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   border-top:1.5px solid #e0e7ff;box-shadow:0 -4px 16px rgba(79,70,229,.08);
@@ -79,18 +101,4 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 [data-hbc-dark] .text-rose-800{color:#f3b3c7!important}
 [data-hbc-dark] .text-amber-800{color:#f0d492!important}
 [data-hbc-dark] .text-indigo-800{color:#b3bffb!important}
-[data-hbc-dark] input,[data-hbc-dark] select,[data-hbc-dark] textarea{
-  background-color:#241f3d!important;color:#eceaf6!important;border-color:#3a3358!important;color-scheme:dark}
-[data-hbc-dark] input::placeholder,[data-hbc-dark] textarea::placeholder{color:#7b74a0}
-[data-hbc-dark] .ti{background:#2c2649;color:#b3bffb}
-[data-hbc-dark] .ecard:hover{box-shadow:0 6px 20px rgba(124,58,237,.35)}
-[data-hbc-dark] ::-webkit-scrollbar-thumb{background:#4c4380}
-[data-hbc-dark] ::-webkit-scrollbar-track{background:#1d1930}
-[data-hbc-dark] .border-emerald-200{border-color:#1f4a3a!important}
-[data-hbc-dark] .border-blue-200{border-color:#233b63!important}
-[data-hbc-dark] .border-purple-200,[data-hbc-dark] .border-purple-300{border-color:#463a73!important}
-[data-hbc-dark] .border-yellow-200,[data-hbc-dark] .border-amber-200{border-color:#54431c!important}
-[data-hbc-dark] .border-red-200{border-color:#5a2e35!important}
-[data-hbc-dark] .border-green-200{border-color:#1f4a3a!important}
-[data-hbc-dark] .bg-emerald-50.border-emerald-200,[data-hbc-dark] .bg-yellow-50{background-color:#2e2812!important}
-[data-hbc-dark] .bg-black\/60{background-color:rgba(0,0,0,.75)!important}
+[data

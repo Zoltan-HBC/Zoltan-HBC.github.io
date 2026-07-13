@@ -159,9 +159,19 @@ window.HBC_SYNC = (function () {
       const a = (data && data.settings) || {};
       const al = JSON.parse(localStorage.getItem('hbc-alerts') || '{"lowOn":true,"highOn":false,"notifOn":false}');
       if (!al.notifOn || !('Notification' in window) || Notification.permission !== 'granted') return;
-      const entries = (data.entries || []).filter(e => e.bloodGlucose);
+      /* v9: a kézi bejegyzések MELLETT a megosztott CGM-mérések is riasztási alapok */
+      const manual = (data.entries || []).filter(e => e.bloodGlucose)
+        .map(e => ({ timestamp: e.timestamp, bloodGlucose: e.bloodGlucose }));
+      const cgm = (data.cgm || []).filter(r => r && r.v)
+        .map(r => ({ timestamp: r.ts, bloodGlucose: r.v }));
+      const entries = manual.concat(cgm);
       if (!entries.length) return;
       const newest = entries.slice().sort((x, y) => new Date(y.timestamp) - new Date(x.timestamp))[0];
+      /* v9: riasztás CSAK az AZNAPI, aktuális mérésre — régebbi (utólag rögzített)
+         érték soha nem vált riasztást */
+      const d = new Date(); const todayISO = [d.getFullYear(),
+        String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+      if (String(newest.timestamp).slice(0, 10) !== todayISO) return;
       if (newest.timestamp === lastAlertTs) return; // ugyanarra az értékre csak egyszer
       const low = a.lowBG != null ? a.lowBG : 3.9, high = a.highBG != null ? a.highBG : 10.0;
       const v = parseFloat(newest.bloodGlucose);

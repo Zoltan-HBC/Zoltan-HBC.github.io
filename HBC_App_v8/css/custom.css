@@ -1,0 +1,96 @@
+
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+html,body{font-family:'Nunito',sans-serif;background:#eef2ff;margin:0;padding:0}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.55}}
+.iob-p{animation:pulse2 2s infinite}
+.ecard{transition:transform .15s,box-shadow .15s}
+.ecard:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(79,70,229,.15)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:#818cf8;border-radius:3px}
+::-webkit-scrollbar-track{background:#e0e7ff}
+button:active{transform:scale(.97)}
+input[type=date],input[type=datetime-local]{color-scheme:light}
+.ta{background:linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))!important;color:#fff!important;box-shadow:0 3px 10px rgba(79,70,229,.4)}
+.ti{background:#e0e7ff;color:#4338ca}
+.chart-container{position:relative;height:260px;width:100%}
+@media(min-width:768px){.chart-container{height:360px}}
+
+/* ═══════════ v8 — ALSÓ NAVIGÁCIÓS SÁV (mobil) ═══════════ */
+.bnav{background:rgba(255,255,255,.93);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-top:1.5px solid #e0e7ff;box-shadow:0 -4px 16px rgba(79,70,229,.08);
+  padding-bottom:env(safe-area-inset-bottom,0)}
+.bnav-a{color:var(--hbc-c1,#4f46e5)}
+.bnav-i{color:#94a3b8}
+.bnav button{transition:color .15s}
+.bnav button:active{transform:scale(.95)}
+[data-hbc-dark] .bnav{background:rgba(24,20,40,.93);border-top-color:#332c52;box-shadow:0 -4px 16px rgba(0,0,0,.4)}
+[data-hbc-dark] .bnav-i{color:#7b74a0}
+[data-hbc-dark] .bnav-a{color:#a5b4fc}
+@media print{.bnav{display:none}}
+
+/* v8 — nagyobb érintőfelületek, fókusz-jelzés (hozzáférhetőség) */
+button{min-height:34px}
+input,select,textarea{min-height:38px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:2.5px solid var(--hbc-c1,#4f46e5);outline-offset:2px}
+/* v8 — sötét mód kontraszt-finomítás (WCAG AA) */
+[data-hbc-dark] .text-gray-400{color:#9d97bd!important}
+[data-hbc-dark] .text-indigo-400{color:#a3b0fa!important}
+
+/* ═══════════ v7.1 — SÖTÉT MÓD ═══════════
+   A [data-hbc-dark] attribútumot az App kapcsolja a Beállítások szerint. */
+[data-hbc-dark] .min-h-screen{background:linear-gradient(160deg,#0e0c1a,#151226)!important}
+[data-hbc-dark] .bg-white{background-color:#1d1930!important}
+[data-hbc-dark] .bg-white\/95,[data-hbc-dark] .bg-white\/90,
+[data-hbc-dark] .bg-white\/80,[data-hbc-dark] .bg-white\/75{background-color:rgba(24,20,40,.82)!important}
+[data-hbc-dark] .text-gray-800,[data-hbc-dark] .text-gray-900{color:#eceaf6!important}
+[data-hbc-dark] .text-gray-500,[data-hbc-dark] .text-gray-600{color:#a9a3c9!important}
+[data-hbc-dark] .text-gray-400{color:#8b85ad!important}
+[data-hbc-dark] .border-indigo-100,[data-hbc-dark] .border-indigo-200{border-color:#332c52!important}
+[data-hbc-dark] .border-gray-200{border-color:#3a3358!important}
+[data-hbc-dark] .bg-indigo-50{background-color:#241f3d!important}
+[data-hbc-dark] .bg-indigo-100{background-color:#2c2649!important}
+[data-hbc-dark] .bg-purple-50{background-color:#2a2044!important}
+[data-hbc-dark] .bg-purple-100{background-color:#332853!important}
+[data-hbc-dark] .bg-blue-50{background-color:#1c2340!important}
+[data-hbc-dark] .bg-amber-50{background-color:#332a17!important}
+[data-hbc-dark] .bg-emerald-50,[data-hbc-dark] .bg-green-50{background-color:#162b24!important}
+[data-hbc-dark] .bg-red-50{background-color:#331d22!important}
+[data-hbc-dark] .bg-lime-100{background-color:#26301a!important}
+[data-hbc-dark] .bg-sky-100{background-color:#16283a!important}
+[data-hbc-dark] .bg-violet-100{background-color:#2d2450!important}
+[data-hbc-dark] .bg-rose-100{background-color:#3a1e2a!important}
+[data-hbc-dark] .bg-amber-100{background-color:#3a2f14!important}
+[data-hbc-dark] .bg-indigo-50 *:not(button):not(input){}
+[data-hbc-dark] .text-indigo-700{color:#a5b4fc!important}
+[data-hbc-dark] .text-indigo-600{color:#96a5fb!important}
+[data-hbc-dark] .text-indigo-400{color:#8d9bf5!important}
+[data-hbc-dark] .text-purple-800,[data-hbc-dark] .text-purple-900{color:#d5c8f7!important}
+[data-hbc-dark] .text-purple-700,[data-hbc-dark] .text-purple-600{color:#c4b0f2!important}
+[data-hbc-dark] .text-purple-500{color:#ab97e0!important}
+[data-hbc-dark] .text-blue-900,[data-hbc-dark] .text-blue-800{color:#bcd3f7!important}
+[data-hbc-dark] .text-blue-700{color:#a9c6f5!important}
+[data-hbc-dark] .text-amber-800,[data-hbc-dark] .text-amber-700{color:#f0d492!important}
+[data-hbc-dark] .text-emerald-700,[data-hbc-dark] .text-green-700{color:#8fe6c0!important}
+[data-hbc-dark] .text-red-700{color:#f5a3a3!important}
+[data-hbc-dark] .text-lime-800{color:#cbe793!important}
+[data-hbc-dark] .text-sky-800{color:#9cd0f5!important}
+[data-hbc-dark] .text-violet-800{color:#cfc0f5!important}
+[data-hbc-dark] .text-rose-800{color:#f3b3c7!important}
+[data-hbc-dark] .text-amber-800{color:#f0d492!important}
+[data-hbc-dark] .text-indigo-800{color:#b3bffb!important}
+[data-hbc-dark] input,[data-hbc-dark] select,[data-hbc-dark] textarea{
+  background-color:#241f3d!important;color:#eceaf6!important;border-color:#3a3358!important;color-scheme:dark}
+[data-hbc-dark] input::placeholder,[data-hbc-dark] textarea::placeholder{color:#7b74a0}
+[data-hbc-dark] .ti{background:#2c2649;color:#b3bffb}
+[data-hbc-dark] .ecard:hover{box-shadow:0 6px 20px rgba(124,58,237,.35)}
+[data-hbc-dark] ::-webkit-scrollbar-thumb{background:#4c4380}
+[data-hbc-dark] ::-webkit-scrollbar-track{background:#1d1930}
+[data-hbc-dark] .border-emerald-200{border-color:#1f4a3a!important}
+[data-hbc-dark] .border-blue-200{border-color:#233b63!important}
+[data-hbc-dark] .border-purple-200,[data-hbc-dark] .border-purple-300{border-color:#463a73!important}
+[data-hbc-dark] .border-yellow-200,[data-hbc-dark] .border-amber-200{border-color:#54431c!important}
+[data-hbc-dark] .border-red-200{border-color:#5a2e35!important}
+[data-hbc-dark] .border-green-200{border-color:#1f4a3a!important}
+[data-hbc-dark] .bg-emerald-50.border-emerald-200,[data-hbc-dark] .bg-yellow-50{background-color:#2e2812!important}
+[data-hbc-dark] .bg-black\/60{background-color:rgba(0,0,0,.75)!important}

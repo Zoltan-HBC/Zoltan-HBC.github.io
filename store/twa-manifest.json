@@ -1,0 +1,30 @@
+{
+  "_comment": "Bubblewrap konfiguráció a Google Play Android-csomaghoz. Használat: npm i -g @bubblewrap/cli → bubblewrap init --manifest=https://SAJAT-CIMED/manifest.json → bubblewrap build. A host mezőt cseréld a saját címedre!",
+  "packageId": "hu.hbc.diabetesznaplo",
+  "host": "SAJAT-FELHASZNALONEV.github.io",
+  "name": "HBC Diabétesz Napló",
+  "launcherName": "HBC Napló",
+  "display": "standalone",
+  "themeColor": "#4f46e5",
+  "navigationColor": "#4f46e5",
+  "backgroundColor": "#eef2ff",
+  "startUrl": "/index.html",
+  "iconUrl": "https://SAJAT-FELHASZNALONEV.github.io/icons/icon-512.png",
+  "maskableIconUrl": "https://SAJAT-FELHASZNALONEV.github.io/icons/icon-maskable-512.png",
+  "appVersionName": "7.0.0",
+  "appVersionCode": 700,
+  "shortcuts": [
+    {
+      "name": "Új bejegyzés",
+      "short_name": "Új bejegyzés",
+      "url": "/index.html?view=add",
+      "chosenIconUrl": "https://SAJAT-FELHASZNALONEV.github.io/icons/icon-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://SAJAT-FELHASZNALONEV.github.io/manifest.json",
+  "fallbackType": "customtabs",
+  "enableNotifications": true,
+  "orientation": "default",
+  "minSdkVersion": 21
+}

@@ -154,6 +154,11 @@ window.HBC_I18N = (function () {
       'Printable summary for your doctor: TIR, estimated HbA1c/GMI, charts and a detailed log. On the opened page you can also save it as PDF via the Print button.',
     'A kezdő dátum nem lehet később, mint a záró dátum!': 'The start date cannot be later than the end date!',
     'GMI ℹ️': 'GMI ℹ️',
+    // ── v10.1: használati útmutató (PDF kézikönyvek) ──
+    'Használati útmutató': 'User Manual',
+    'A teljes kézikönyv PDF-ben. A könyv ikonnal megnyitod, a nyíllal letöltöd. Megnyitás után offline is elérhető marad.':
+      'The full manual as PDF. Tap the book to open it, the arrow to download. Once opened, it stays available offline.',
+    'Letöltés': 'Download',
     // ── v9: új funkciók szövegei ──
     'Menü': 'Menu', 'Oldalak': 'Pages', 'Bezárás': 'Close',
     'Gyors (bólus) inzulin': 'Rapid (bolus) insulin', 'Bázis inzulin': 'Basal insulin',

@@ -1392,6 +1392,25 @@ function Settings({settings,onSave}){
       ),
       h('p',{className:'text-xs text-gray-400 mt-1'},'A Délben-határ után az „Este" ICR érvényes.')
     ]),
+    /* v10.1: HASZNÁLATI ÚTMUTATÓ — magyar és angol PDF kézikönyv megnyitása/letöltése.
+       Új lapon nyílik (asztalin böngésző PDF-néző, telefonon rendszer-megjelenítő);
+       a ⬇ gomb azonnali mentés. Első megnyitás után a service worker cache-eli → offline is elérhető. */
+    card([
+      h('h2',{className:'font-black text-gray-800 mb-1'},'📖 '+window.t('Használati útmutató')),
+      h('p',{className:'text-xs text-gray-500 mb-3'},window.t('A teljes kézikönyv PDF-ben. A könyv ikonnal megnyitod, a nyíllal letöltöd. Megnyitás után offline is elérhető marad.')),
+      h('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3'},
+        [{f:'HBC_Felhasznaloi_Kezikonyv_v10_HU.pdf',lb:'📘 Magyar kézikönyv (PDF)'},
+         {f:'HBC_User_Manual_v10_EN.pdf',lb:'📗 English manual (PDF)'}].map(m=>
+          h('div',{key:m.f,className:'flex items-stretch gap-2'},
+            h('a',{href:m.f,target:'_blank',rel:'noopener',
+              className:'ti flex-1 inline-flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm min-h-[44px]',
+              style:{textDecoration:'none'}},m.lb),
+            h('a',{href:m.f,download:m.f,'aria-label':window.t('Letöltés')+': '+m.lb,
+              className:'ti inline-flex items-center justify-center px-4 rounded-xl font-black text-lg min-h-[44px]',
+              style:{textDecoration:'none'},title:window.t('Letöltés')},'⬇')
+          ))
+      )
+    ]),
     h('button',{onClick:()=>onSave(s),
       className:'w-full font-black text-white py-3 rounded-2xl shadow-lg',
       style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'✅ Beállítások mentése')

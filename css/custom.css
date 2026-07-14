@@ -101,4 +101,43 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 [data-hbc-dark] .text-rose-800{color:#f3b3c7!important}
 [data-hbc-dark] .text-amber-800{color:#f0d492!important}
 [data-hbc-dark] .text-indigo-800{color:#b3bffb!important}
-[data
+[data-hbc-dark] .text-indigo-900{color:#c4cdfc!important}
+[data-hbc-dark] input,[data-hbc-dark] select,[data-hbc-dark] textarea{
+  background-color:#241f3d;color:#eceaf6;border-color:#3a3358}
+[data-hbc-dark] input[type=date],[data-hbc-dark] input[type=datetime-local]{color-scheme:dark}
+
+/* ═══════════ v10 FIX — HIÁNYZÓ TAILWIND-OSZTÁLYOK PÓTLÁSA ═══════════
+   A css/app.css előre fordított Tailwind-fájl, amelyből a v9/v10-ben
+   bevezetett osztályok hiányoznak. Ezek némán nem működtek:
+   - asztali gombsor sosem jelent meg (md:block hiánya)
+   - hamburger asztalin is látszott (md:hidden hiánya)
+   - a mobil menü a bal szélre zsugorodott (inset-x-0 hiánya)
+   - a menü a tartalom ALÁ került (z-[95] hiánya) → réteghibák minden oldalon */
+.inset-x-0{left:0;right:0}
+.left-0{left:0}
+.right-0{right:0}
+.bottom-0{bottom:0}
+.bottom-20{bottom:5rem}
+.top-\[64px\]{top:64px}
+.z-\[95\]{z-index:95}
+.bg-black\/40{background-color:rgba(0,0,0,.4)}
+.flex-col{flex-direction:column}
+.inline-flex{display:inline-flex}
+.items-stretch{align-items:stretch}
+.justify-around{justify-content:space-around}
+.gap-0\.5{gap:.125rem}
+.pb-28{padding-bottom:7rem}
+.leading-none{line-height:1}
+.leading-snug{line-height:1.375}
+.tracking-wide{letter-spacing:.025em}
+.uppercase{text-transform:uppercase}
+.underline{text-decoration-line:underline}
+.min-h-\[44px\]{min-height:44px}
+@media(min-width:768px){
+  .md\:hidden{display:none}
+  .md\:block{display:block}
+  .md\:gap-3{gap:.75rem}
+  .md\:pb-6{padding-bottom:1.5rem}
+  .md\:bottom-5{bottom:1.25rem}
+  .md\:grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+}

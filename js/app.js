@@ -595,7 +595,7 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
 <table><thead><tr><th>${R('Időpont','Time')}</th><th>${R('Típus','Type')}</th><th>${R('VC','BG')} (${UL})</th><th>CH (g)</th><th>${esc(rapidN)} (E)</th><th>${esc(basalN)} (E)</th><th>${R('Megjegyzés','Notes')}</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <div class="warn">⚠️ ${R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!','This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!')}</div>
-<div class="foot"><span>HBC Diabétesz Napló v8.0 Personal APP</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
+<div class="foot"><span>${R('HBC Diabétesz Napló v10.0 Type 1 Diabetes APP','HBC Diabetes Diary v10.0 Type 1 Diabetes APP')}</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
 <script>setTimeout(function(){window.print();},400);</script>
 </body></html>`;
   const win=window.open('','_blank');
@@ -1606,8 +1606,8 @@ function App(){
         h('div',{className:'flex items-center gap-2 md:gap-3 min-w-0'},
           h('img',{src:'icons/TypeOneDiab_logo.png',alt:'TypeOneDiab logo',className:'hbc-logo'}),
           h('div',{className:'min-w-0'},
-            h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},'HBC Diabétesz Napló'),
-            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v10.0 Personal APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
+            h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},window.t('HBC Diabétesz Napló')),
+            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v10.0 Type 1 Diabetes APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
           )
         ),
         h('div',{className:'flex items-center gap-2 shrink-0'},
@@ -1619,8 +1619,8 @@ function App(){
         )
       )
     ),
-    // ═══ Asztali nézet: minden oldalválasztó gomb a felső sávban — v10: nagyobb, egyenletesen osztott (v7-elv) ═══
-    h('div',{className:'hidden md:block bg-white/75 backdrop-blur-md border-b border-indigo-100 sticky top-[64px] z-40'},
+    // ═══ Asztali nézet: minden oldalválasztó gomb a felső sávban — v10.1: a mért fejlécmagassághoz tapad ═══
+    h('div',{className:'hidden md:block bg-white/75 backdrop-blur-md border-b border-indigo-100 sticky z-40',style:{top:headerH+'px'}},
       h('div',{className:'max-w-5xl mx-auto px-2 py-2 flex gap-1.5'},
         visTabs.map(tb=>h('button',{key:tb.id,onClick:()=>go(tb.id),type:'button',
           className:`flex-1 min-w-0 flex items-center justify-center gap-2 px-2 py-2.5 rounded-xl font-bold text-sm text-center leading-snug transition-all ${view===tb.id?'ta':'ti hover:bg-indigo-100'}`},

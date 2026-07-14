@@ -11,19 +11,29 @@
   fér hozzá, a Drive-od többi tartalmát nem is látja.
 
 ## 1. rész — Google Cloud beállítás (egyszer, a te Google-fiókoddal)
+*(2026 közepe óta a Google a korábbi egylépéses „OAuth consent screen" helyett egy
+többlépéses „Google Auth Platform" varázslót és bal oldali menüsávot használ — az
+alábbi lépések ezt a jelenlegi felületet követik.)*
 1. Nyisd meg: https://console.cloud.google.com (lépj be a Gmail-fiókoddal)
-2. Fent „Select a project" → „NEW PROJECT" → név: `HBC Naplo` → Create
+2. Fent a projektválasztóban → „NEW PROJECT" → név: `HBC Naplo` → Create
 3. Bal menü → „APIs & Services" → „Library" → keresd: **Google Drive API** → Enable
    Utána ugyanígy: **Google Picker API** → Enable
-4. „APIs & Services" → „OAuth consent screen" → External → Create
-   - App name: HBC Naplo; support email: a saját címed → Save
-   - Scopes: nem kell hozzáadni semmit → Save
-   - Test users: add hozzá a SAJÁT e-mail-címed ÉS ANDIÉT → Save
-   (Teszt módban max. 100 felhasználó — nektek bőven elég, nem kell Google-felülvizsgálat.)
-5. „APIs & Services" → „Credentials" → „+ CREATE CREDENTIALS" → „OAuth client ID"
-   - Application type: **Web application**; név: HBC Naplo Web
-   - „Authorized JavaScript origins" → ADD URI: `https://NEVED.github.io`
-   - Create → másold ki a **Client ID**-t (xxxx.apps.googleusercontent.com)
+4. Első belépéskor megjelenik a **Google Auth Platform** beállító varázslója
+   (Overview fül → „Get started"):
+   - App name: HBC Naplo; User support email: a saját címed → Next
+   - Audience: **External** → Next
+   - Contact information: a saját e-mail-címed újra → Next
+   - Finish → fogadd el a feltételeket
+5. Bal menü → **„Audience"** → görgess a „Test users" részhez → „+ Add users" →
+   add hozzá a SAJÁT e-mail-címed ÉS ANDIÉT → Save
+   (Teszt módban — Publishing status: Testing — max. 100 felhasználó; nektek bőven
+   elég, nem kell Google-felülvizsgálat/verifikáció.)
+6. Bal menü → **„Clients"** → „+ Create client"
+   - Type: **Web application**; név: bármi lehet (pl. HBC Naplo Web)
+   - „Authorized JavaScript origins" → „+ ADD URI": `https://NEVED.github.io`
+   - Create
+7. Kattints a most létrehozott kliensre (a Clients listában) → a részletező oldalon
+   másold ki a **Client ID**-t (hosszú szöveg, `.apps.googleusercontent.com` végződéssel)
 
 ## 2. rész — Bekapcsolás a TE telefonodon/gépeden (tulajdonos)
 1. App → Szinkron fül → „☁️ Google Drive szinkron"

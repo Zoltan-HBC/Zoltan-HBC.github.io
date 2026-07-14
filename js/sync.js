@@ -16,8 +16,11 @@ window.HBC_SYNC = (function () {
 
   function loadCfg() {
     try { Object.assign(cfg, JSON.parse(localStorage.getItem('hbc-drive') || '{}')); } catch (e) {}
-    accessToken = sessionStorage.getItem('hbc-drive-token') || null;
-    tokenExp = parseInt(sessionStorage.getItem('hbc-drive-exp') || '0');
+    /* v10.1: token localStorage-ban — az ablak bezárása után is megmarad
+       (a sessionStorage minden induláskor kiürült → felesleges újra-bejelentkezés).
+       A token max. ~1 óráig érvényes, lejárat után csendes megújítás megy először. */
+    accessToken = localStorage.getItem('hbc-drive-token') || sessionStorage.getItem('hbc-drive-token') || null;
+    tokenExp = parseInt(localStorage.getItem('hbc-drive-exp') || sessionStorage.getItem('hbc-drive-exp') || '0');
   }
   function saveCfg() { localStorage.setItem('hbc-drive', JSON.stringify(cfg)); emit('status'); }
   function emit(type, payload) { (listeners[type] || []).forEach(f => { try { f(payload); } catch (e) {} }); }
@@ -33,10 +36,14 @@ window.HBC_SYNC = (function () {
     });
   }
 
-  /* ── Bejelentkezés (Google Identity Services) ── */
-  function ensureToken(interactive) {
-    if (accessToken && Date.now() < tokenExp - 60000) return Promise.resolve(accessToken);
-    return loadScript('https://accounts.google.com/gsi/client').then(() => new Promise((res, rej) => {
+  /* ── Bejelentkezés (Google Identity Services) ──
+     v10.1: (1) érvényes tárolt token → semmilyen ablak nem nyílik;
+     (2) először MINDIG csendes kérés (prompt:'') — ha van élő Google-munkamenet
+     és korábbi hozzájárulás, az ablak magától bezáródik, kattintás nélkül;
+     (3) teljes consent-képernyő CSAK akkor, ha a csendes kérés meghiúsul
+     és a hívás felhasználói művelethez kötött (interactive). */
+  function requestToken(promptVal) {
+    return new Promise((res, rej) => {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: cfg.clientId,
         scope: SCOPE,
@@ -44,13 +51,28 @@ window.HBC_SYNC = (function () {
           if (r.error) return rej(new Error(r.error));
           accessToken = r.access_token;
           tokenExp = Date.now() + (parseInt(r.expires_in) || 3600) * 1000;
-          sessionStorage.setItem('hbc-drive-token', accessToken);
-          sessionStorage.setItem('hbc-drive-exp', String(tokenExp));
+          localStorage.setItem('hbc-drive-token', accessToken);
+          localStorage.setItem('hbc-drive-exp', String(tokenExp));
           res(accessToken);
-        }
+        },
+        error_callback: (e) => rej(new Error((e && e.type) || 'popup_error'))
       });
-      tokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
-    }));
+      tokenClient.requestAccessToken({ prompt: promptVal });
+    });
+  }
+  function ensureToken(interactive) {
+    if (accessToken && Date.now() < tokenExp - 60000) return Promise.resolve(accessToken);
+    return loadScript('https://accounts.google.com/gsi/client')
+      .then(() => requestToken(''))
+      .catch(err => {
+        if (interactive) return requestToken('consent');
+        throw err;
+      });
+  }
+  function clearToken() {
+    accessToken = null; tokenExp = 0;
+    localStorage.removeItem('hbc-drive-token'); localStorage.removeItem('hbc-drive-exp');
+    sessionStorage.removeItem('hbc-drive-token'); sessionStorage.removeItem('hbc-drive-exp');
   }
 
   /* ── Mappa- / fájlválasztó (Google Picker) ── */
@@ -86,6 +108,7 @@ window.HBC_SYNC = (function () {
     opts = opts || {};
     opts.headers = Object.assign({ Authorization: 'Bearer ' + accessToken }, opts.headers || {});
     return fetch('https://www.googleapis.com/' + path, opts).then(r => {
+      if (r.status === 401) { clearToken(); } /* v10.1: lejárt/visszavont token → következő hívás újat kér */
       if (!r.ok) throw new Error('Drive API hiba: ' + r.status);
       return r;
     });

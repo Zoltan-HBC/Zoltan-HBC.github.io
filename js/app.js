@@ -1200,7 +1200,7 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
 const DEFAULT_SETTINGS={lowBG:3.9,highBG:10.0,targetBG:6.0,sensitivity:2.5,
   bgUnit:'mmol',icrMorning:10,icrNoon:10,icrEvening:10,
   rapidName:'Humalog',basalName:'Lantus',diaHours:4,
-  nickname:'',theme:'indigo',motivation:true,darkMode:'light',
+  nickname:'',theme:'indigo',motivation:true,darkMode:'light',customBg:null, /* v10: egyéni háttérszín */
   /* v8: felhasználó által módosítható napszakhatárok (óra) */
   mb1:9,mb2:11,mb3:14,mb4:17,mb5:21,   /* étkezéstípus-alapértelmezés: Reggeli-ig, Tízórai-ig, Ebéd-ig, Uzsonna-ig, Vacsora-ig */
   ib1:10,ib2:16};                       /* bolus-ICR: Reggel-ig, Délben-ig (utána Este) */
@@ -1305,6 +1305,18 @@ function Settings({settings,onSave}){
             h('option',{value:'light'},'☀️ Világos'),
             h('option',{value:'dark'},'🌙 Sötét'),
             h('option',{value:'auto'},'🌗 Automatikus (rendszer szerint)'))
+        ),
+        /* v10: egyéni háttérszín — felugró színskáláról, a Megjelenés mellett */
+        h('div',null,
+          h('label',{className:'text-sm font-bold text-indigo-700 block mb-1'},'🎨 Egyéni háttérszín (színskáláról)'),
+          h('div',{className:'flex items-center gap-3 flex-wrap'},
+            h('input',{type:'color',value:s.customBg||'#8b7cf6',
+              onChange:e=>setS({...s,customBg:e.target.value}),
+              className:'hbc-colorpick',title:'Egyéni háttérszín'}),
+            s.customBg&&h('button',{type:'button',onClick:()=>setS({...s,customBg:null}),
+              className:'text-xs font-bold text-indigo-500 underline'},'↩️ Visszaállítás (alap háttér)')
+          ),
+          h('p',{className:'text-xs text-gray-500 mt-1'},'Koppints a színmezőre, és válassz a felugró színskáláról! A háttér az egész alkalmazásban lágy színátmenetként jelenik meg, a kártyák kontrasztja megmarad.')
         )
       ),
       h('div',{className:'mt-4'},
@@ -1416,6 +1428,24 @@ function shiftHue(hex,deg){
   }catch(e){return hex;}
 }
 
+/* v10: egyéni háttérszín — a választott színt lágy háttér-gradienssé keveri
+   (világos módban fehérrel, sötét módban a sötét alaptónussal), a kártyák
+   kontrasztja (fehér/sötétlila kártyaháttér) változatlan marad. */
+function mixHex(hex,withHex,amt){
+  try{
+    const a=parseInt(hex.slice(1),16),b=parseInt(withHex.slice(1),16);
+    const ar=a>>16&255,ag=a>>8&255,ab=a&255,br=b>>16&255,bg=b>>8&255,bb=b&255;
+    const to=x=>Math.round(Math.max(0,Math.min(255,x))).toString(16).padStart(2,'0');
+    return '#'+to(ar*(1-amt)+br*amt)+to(ag*(1-amt)+bg*amt)+to(ab*(1-amt)+bb*amt);
+  }catch(e){return hex;}
+}
+function customBgVars(hex){
+  return{
+    bg1:mixHex(hex,'#ffffff',0.87),bg2:mixHex(hex,'#ffffff',0.79),
+    bg1Dark:mixHex(hex,'#0e0c1a',0.82),bg2Dark:mixHex(hex,'#151226',0.72)
+  };
+}
+
 function App(){
   const [view,setView]=useState('dashboard');
   const [entries,setEntries]=useState(LOADED_ENTRIES);
@@ -1426,6 +1456,16 @@ function App(){
   const [followerData,setFollowerData]=useState(null); /* v7: követő mód adatai */
   const [toast,setToast]=useState(null); /* v7 UX: rövid pozitív visszajelzés */
   const [menuOpen,setMenuOpen]=useState(false); /* v9: mobil hamburger menü */
+  const [headerH,setHeaderH]=useState(64); /* v10: mért fejléc-magasság — a menü ez alatt nyílik */
+  const headerRef=useRef(null);
+  useEffect(()=>{
+    const measure=()=>{if(headerRef.current)setHeaderH(headerRef.current.offsetHeight);};
+    measure();
+    let ro;
+    if(window.ResizeObserver&&headerRef.current){ro=new ResizeObserver(measure);ro.observe(headerRef.current);}
+    window.addEventListener('resize',measure);
+    return ()=>{window.removeEventListener('resize',measure);if(ro)ro.disconnect();};
+  },[]);
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),3000);};
   const followerMode=window.HBC_SYNC&&window.HBC_SYNC.cfg.mode==='follower';
 
@@ -1460,6 +1500,19 @@ function App(){
     if(settings.theme==='custom'&&settings.customC1)tc=[settings.customC1,shiftHue(settings.customC1,28)];
     document.documentElement.style.setProperty('--hbc-c1',tc[0]);
     document.documentElement.style.setProperty('--hbc-c2',tc[1]);
+    /* v10: egyéni háttérszín — ha nincs beállítva, a CSS var()-fallback adja az alap háttért */
+    if(settings.customBg){
+      const bv=customBgVars(settings.customBg);
+      document.documentElement.style.setProperty('--hbc-bg1',bv.bg1);
+      document.documentElement.style.setProperty('--hbc-bg2',bv.bg2);
+      document.documentElement.style.setProperty('--hbc-bg1-dark',bv.bg1Dark);
+      document.documentElement.style.setProperty('--hbc-bg2-dark',bv.bg2Dark);
+    }else{
+      document.documentElement.style.removeProperty('--hbc-bg1');
+      document.documentElement.style.removeProperty('--hbc-bg2');
+      document.documentElement.style.removeProperty('--hbc-bg1-dark');
+      document.documentElement.style.removeProperty('--hbc-bg2-dark');
+    }
     /* v7.1: sötét mód (kapcsolt vagy rendszerkövető) */
     const wantDark=settings.darkMode==='dark'||
       (settings.darkMode==='auto'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -1511,7 +1564,7 @@ function App(){
     const csv=[['Időpont','Típus','Vércukor ('+window.bgU.label()+')','CH (g)',(settings.rapidName||'Humalog')+' (E)',(settings.basalName||'Lantus')+' (E)','Jegyzetek'].join(','),
       ...s.map(e=>[new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()),e.type||'',e.bloodGlucose?window.bgU.disp(e.bloodGlucose):'',e.carbs||'',e.insulinRapid||'',e.insulinLong||'',`"${(e.notes||'').replace(/"/g,'""')}"`].join(','))
     ].join('\n');
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v9_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v10_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
   };
   const importJSON=txt=>{
     try{let arr=JSON.parse(txt);if(arr&&!Array.isArray(arr)&&Array.isArray(arr.entries))arr=arr.entries;if(!Array.isArray(arr))throw new Error(window.t('Nem tömb!'));const ids=new Set(entries.map(e=>e.id));const newOnes=arr.filter(e=>!ids.has(e.id));saveEntries([...entries,...newOnes]);showAlert(`✅ ${newOnes.length} új bejegyzés importálva.`);}catch(err){showAlert('❌ Hiba: '+err.message);}
@@ -1546,15 +1599,15 @@ function App(){
   const visTabs=tabs.filter(tb=>!(followerMode&&(tb.id==='foods')));
   const go=id=>{setView(id);setMenuOpen(false);};
 
-  return h('div',{className:'min-h-screen',style:{background:'linear-gradient(160deg,#eef2ff,#f5f3ff)'}},
+  return h('div',{className:'min-h-screen',style:{background:'linear-gradient(160deg,var(--hbc-bg1,#eef2ff),var(--hbc-bg2,#f5f3ff))'}},
     // ═══ Fejléc: v9 — TypeOneDiab logó + hamburger (mobil) ═══
-    h('div',{className:'bg-white/80 backdrop-blur-md shadow sticky top-0 z-50 border-b border-indigo-100'},
+    h('div',{ref:headerRef,className:'bg-white/80 backdrop-blur-md shadow sticky top-0 z-50 border-b border-indigo-100'},
       h('div',{className:'max-w-5xl mx-auto px-3 py-2 flex items-center justify-between gap-2'},
         h('div',{className:'flex items-center gap-2 md:gap-3 min-w-0'},
           h('img',{src:'icons/TypeOneDiab_logo.png',alt:'TypeOneDiab logo',className:'hbc-logo'}),
           h('div',{className:'min-w-0'},
             h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},'HBC Diabétesz Napló'),
-            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v9.0 Personal APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
+            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v10.0 Personal APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
           )
         ),
         h('div',{className:'flex items-center gap-2 shrink-0'},
@@ -1566,19 +1619,21 @@ function App(){
         )
       )
     ),
-    // ═══ Asztali nézet: minden oldalválasztó gomb a felső sávban (v7 szerint) ═══
+    // ═══ Asztali nézet: minden oldalválasztó gomb a felső sávban — v10: nagyobb, egyenletesen osztott (v7-elv) ═══
     h('div',{className:'hidden md:block bg-white/75 backdrop-blur-md border-b border-indigo-100 sticky top-[64px] z-40'},
-      h('div',{className:'max-w-5xl mx-auto px-2 py-2 flex gap-1 overflow-x-auto'},
+      h('div',{className:'max-w-5xl mx-auto px-2 py-2 flex gap-1.5'},
         visTabs.map(tb=>h('button',{key:tb.id,onClick:()=>go(tb.id),type:'button',
-          className:`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold whitespace-nowrap text-xs transition-all ${view===tb.id?'ta':'ti hover:bg-indigo-100'}`},
-          h(Icon,{name:tb.ic,size:15}),window.t(tb.f)
+          className:`flex-1 min-w-0 flex items-center justify-center gap-2 px-2 py-2.5 rounded-xl font-bold text-sm text-center leading-snug transition-all ${view===tb.id?'ta':'ti hover:bg-indigo-100'}`},
+          h(Icon,{name:tb.ic,size:18}),h('span',null,window.t(tb.f))
         ))
       )
     ),
-    // ═══ v9: mobil hamburger menü — minden oldal elérhető ═══
-    menuOpen&&h('div',{className:'md:hidden fixed inset-0 z-[95] bg-black/40',
+    // ═══ v10: mobil hamburger menü — a fejléc ALATT nyílik, nem takarja a fejlécet ═══
+    menuOpen&&h('div',{className:'md:hidden fixed inset-x-0 bottom-0 z-[95] bg-black/40',
+      style:{top:'calc('+headerH+'px + env(safe-area-inset-top,0px))'},
       onClick:e=>{if(e.target===e.currentTarget)setMenuOpen(false);}},
-      h('div',{className:'hbc-menu'},
+      h('div',{className:'hbc-menu',
+        style:{maxHeight:'calc(100vh - '+headerH+'px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 16px)',overflowY:'auto'}},
         h('p',{className:'text-xs font-black text-gray-400 uppercase tracking-wide mb-2'},'Oldalak'),
         h('div',{className:'grid grid-cols-2 gap-2'},
           visTabs.map(tb=>h('button',{key:tb.id,onClick:()=>go(tb.id),type:'button',

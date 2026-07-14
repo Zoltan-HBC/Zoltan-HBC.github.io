@@ -61,7 +61,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 /* ═══════════ v7.1 — SÖTÉT MÓD ═══════════
    A [data-hbc-dark] attribútumot az App kapcsolja a Beállítások szerint. */
-[data-hbc-dark] .min-h-screen{background:linear-gradient(160deg,#0e0c1a,#151226)!important}
+[data-hbc-dark] .min-h-screen{background:linear-gradient(160deg,var(--hbc-bg1-dark,#0e0c1a),var(--hbc-bg2-dark,#151226))!important}
 [data-hbc-dark] .bg-white{background-color:#1d1930!important}
 [data-hbc-dark] .bg-white\/95,[data-hbc-dark] .bg-white\/90,
 [data-hbc-dark] .bg-white\/80,[data-hbc-dark] .bg-white\/75{background-color:rgba(24,20,40,.82)!important}

@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v9.0 Personal APP
+# HBC Diabétesz Napló v10.0 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).
@@ -7,6 +7,18 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 1. **TELEPITESI_UTMUTATO.md** — közzététel (GitHub Pages, ingyenes) + telepítés minden eszközre
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
+
+## Mit tud a v9-hez képest? (v10 újdonságok)
+- **Nagyobb asztali gombsor:** a felső oldalválasztó gombok az app tartalmi
+  szélességén (nem a monitor teljes szélességén) egyenletesen osztoznak,
+  nagyobb betűvel és ikonnal, jobban kattinthatóan
+- **Javított mobil hamburger menü:** a menüpanel mostantól a fejléc ALATT
+  nyílik — korábban előfordulhatott, hogy a panel eltakarta a fejlécet;
+  emellett sok elemnél a panel görgethető
+- **Egyéni háttérszín:** Beállítások → Megjelenés mellett felugró színskáláról
+  választható egyéni háttérszín, amely lágy színátmenetként jelenik meg az
+  app teljes felületén (világos és sötét módban is), a kártyák kontrasztjának
+  megtartása mellett; „Visszaállítás" gombbal bármikor törölhető
 
 ## Mit tud a v8-hoz képest? (v9 újdonságok)
 - **Sérült v8-fájlok helyreállítva:** az app.js, i18n.js és README.md a v8-as

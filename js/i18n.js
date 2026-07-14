@@ -172,6 +172,12 @@ window.HBC_I18N = (function () {
     '– Válassz –': '– Choose –', '➕ Új étel mentése adatbázisba:': '➕ Save new food to database:',
     'pl. Séta, Számítógépezés...': 'e.g. Walking, Computer time...',
     'Nem tömb!': 'Not a list!',
+    // ── v10: egyéni háttérszín + nagyobb asztali gombsor ──
+    '🎨 Egyéni háttérszín (színskáláról)': '🎨 Custom background color (from palette)',
+    'Egyéni háttérszín': 'Custom background color',
+    '↩️ Visszaállítás (alap háttér)': '↩️ Reset (default background)',
+    'Koppints a színmezőre, és válassz a felugró színskáláról! A háttér az egész alkalmazásban lágy színátmenetként jelenik meg, a kártyák kontrasztja megmarad.':
+      'Tap the color field and pick from the pop-up palette! The background will appear as a soft gradient throughout the app, while card contrast is preserved.',
     // hónap-rövidítések a dátumformázáshoz (fmtDT/fmtAlwaysDT)
     'jan.': 'Jan', 'feb.': 'Feb', 'már.': 'Mar', 'ápr.': 'Apr', 'máj.': 'May', 'jún.': 'Jun',
     'júl.': 'Jul', 'aug.': 'Aug', 'szep.': 'Sep', 'okt.': 'Oct', 'nov.': 'Nov', 'dec.': 'Dec'

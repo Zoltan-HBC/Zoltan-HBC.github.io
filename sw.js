@@ -1,5 +1,5 @@
-/* HBC Diabétesz Napló v9.0 — Service Worker (offline működés) */
-const CACHE = 'hbc-v9.0.0';
+/* HBC Diabétesz Napló v10.0 — Service Worker (offline működés) */
+const CACHE = 'hbc-v10.0.0';
 const ASSETS = [
   './',
   './index.html',

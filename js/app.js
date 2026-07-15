@@ -1459,8 +1459,11 @@ function Settings({settings,onSave}){
       h('h2',{className:'font-black text-gray-800 mb-1'},'📖 '+window.t('Használati útmutató')),
       h('p',{className:'text-xs text-gray-500 mb-3'},window.t('A teljes kézikönyv PDF-ben. A könyv ikonnal megnyitod, a nyíllal letöltöd. Megnyitás után offline is elérhető marad.')),
       h('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-3'},
-        [{f:'HBC_Felhasznaloi_Kezikonyv_v10_HU.pdf',lb:'📘 Magyar kézikönyv (PDF)'},
-         {f:'HBC_User_Manual_v10_EN.pdf',lb:'📗 English manual (PDF)'}].map(m=>
+        /* v11.1.2: verziószám NÉLKÜLI, állandó fájlnevek — így a link soha nem törik el
+           verzióváltáskor, és mindig a GitHub-on lévő legfrissebb PDF nyílik meg
+           (a service worker network-first stratégiával tölti, offline cache-fallbackkel). */
+        [{f:'HBC_Felhasznaloi_Kezikonyv_HU.pdf',lb:'📘 Magyar kézikönyv (PDF)'},
+         {f:'HBC_User_Manual_EN.pdf',lb:'📗 English manual (PDF)'}].map(m=>
           h('div',{key:m.f,className:'flex items-stretch gap-2'},
             h('a',{href:m.f,target:'_blank',rel:'noopener',
               className:'ti flex-1 inline-flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm min-h-[44px]',

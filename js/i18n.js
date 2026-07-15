@@ -13,6 +13,7 @@ window.HBC_I18N = (function () {
     'HBC Diabétesz Napló': 'HBC Diabetes Diary',
     // v12: SOS vészhelyzeti modul
     'Vészhelyzet': 'Emergency', 'Vészhelyzet (SOS)': 'Emergency (SOS)',
+    'A követő mód csak-olvasási Google Drive-jogot kér. Ez azért kell, hogy a kiválasztott naplófájl a Google-belépés lejárta után se „vesszen el”. Az app ezzel sem tud semmit írni vagy módosítani a Drive-on.': 'Follower mode requests read-only Google Drive access. This is needed so the selected diary file is not "lost" after the Google sign-in expires. Even with this, the app cannot write or modify anything on Drive.',
     'Ezek az adatok a menü piros SOS gombjára koppintva jelennek meg — az ismeretlen segítők és a mentők számára.': 'This information appears when the red SOS button in the menu is tapped — for unknown helpers and paramedics.',
     'Minden adat kizárólag a te eszközödön tárolódik.': 'All data is stored only on your device.',
     'Teljes név (Orvosi riporton is)': 'Full name (also shown on the Medical report)',

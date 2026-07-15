@@ -28,7 +28,7 @@ const INIT_FOODS = [
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION='12.0';
+const APP_VERSION='12.1';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {useState,useEffect,useRef,useCallback,useMemo,Fragment}=React;
@@ -1176,6 +1176,9 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
               '3️⃣ '+window.t('Mappa kiválasztása')+(S.cfg.folderName?' ✅ ('+S.cfg.folderName+')':''))
           :h('button',{type:'button',onClick:pickFile,disabled:!S.cfg.clientId,className:stepBtn+' bg-purple-600 disabled:opacity-40'},
               '3️⃣ '+window.t('Megosztott napló kiválasztása')+(S.cfg.fileName?' ✅ ('+S.cfg.fileName+')':'')),
+        /* v12.1: követő módban csak-olvasási Drive-jog — magyarázat */
+        mode==='follower'&&h('p',{className:'text-[11px] text-purple-500'},
+          window.t('A követő mód csak-olvasási Google Drive-jogot kér. Ez azért kell, hogy a kiválasztott naplófájl a Google-belépés lejárta után se „vesszen el”. Az app ezzel sem tud semmit írni vagy módosítani a Drive-on.')),
         /* állapot */
         S.cfg.lastSync&&h('p',{className:'text-xs text-gray-400'},window.t('Utolsó szinkron')+': '+new Date(S.cfg.lastSync).toLocaleString()),
         h('div',{className:'flex gap-2'},

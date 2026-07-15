@@ -13,7 +13,15 @@
    automatikusan pótlódik, amint visszatér a kapcsolat. */
 
 window.HBC_SYNC = (function () {
-  const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  /* v12.1: mód-függő jogosultság.
+     Tulajdonos: drive.file — az app csak az általa létrehozott fájlt éri el.
+     Követő: drive.readonly (csak olvasás) — a drive.file-lal a fájlválasztóban
+     kijelölt IDEGEN fájl hozzáférése a Google-belépés lejártával elveszett
+     (404: „naplófájl nem található”), ezért a követőnek tartós, csak-olvasási
+     jog kell. Írni ezzel sem tud. */
+  const SCOPE_OWNER = 'https://www.googleapis.com/auth/drive.file';
+  const SCOPE_FOLLOWER = 'https://www.googleapis.com/auth/drive.readonly';
+  const SCOPE = () => (cfg.mode === 'follower' ? SCOPE_FOLLOWER : SCOPE_OWNER);
   const FILE_NAME = 'HBC_Diabetesz_Naplo.json';
   let tokenClient = null, accessToken = null, tokenExp = 0;
   let cfg = { mode: 'off', clientId: '', folderId: '', folderName: '', fileId: '', fileName: '', minutes: 5 };
@@ -54,13 +62,14 @@ window.HBC_SYNC = (function () {
     return new Promise((res, rej) => {
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: cfg.clientId,
-        scope: SCOPE,
+        scope: SCOPE(),
         callback: (r) => {
           if (r.error) return rej(new Error(r.error));
           accessToken = r.access_token;
           tokenExp = Date.now() + (parseInt(r.expires_in) || 3600) * 1000;
           localStorage.setItem('hbc-drive-token', accessToken);
           localStorage.setItem('hbc-drive-exp', String(tokenExp));
+          localStorage.setItem('hbc-drive-scope', SCOPE()); /* v12.1 */
           res(accessToken);
         },
         error_callback: (e) => rej(new Error((e && e.type) || 'popup_error'))
@@ -69,6 +78,8 @@ window.HBC_SYNC = (function () {
     });
   }
   function ensureToken(interactive) {
+    /* v12.1: más módhoz kért (más jogosultságú) tárolt token nem használható fel */
+    if (accessToken && localStorage.getItem('hbc-drive-scope') !== SCOPE()) clearToken();
     if (accessToken && Date.now() < tokenExp - 60000) return Promise.resolve(accessToken);
     return loadScript('https://accounts.google.com/gsi/client')
       .then(() => requestToken(''))
@@ -80,6 +91,7 @@ window.HBC_SYNC = (function () {
   function clearToken() {
     accessToken = null; tokenExp = 0;
     localStorage.removeItem('hbc-drive-token'); localStorage.removeItem('hbc-drive-exp');
+    localStorage.removeItem('hbc-drive-scope');
     sessionStorage.removeItem('hbc-drive-token'); sessionStorage.removeItem('hbc-drive-exp');
   }
 
@@ -328,7 +340,10 @@ window.HBC_SYNC = (function () {
   return {
     cfg, on, saveCfg, ensureToken, openPicker, push, pull, syncNow, merge, startPolling, stopPolling,
     setPayloadProvider(fn) { payloadProvider = fn; },
-    setMode(m) { cfg.mode = m; saveCfg(); startPolling(); },
+    setMode(m) {
+      if (cfg.mode !== m) clearToken(); /* v12.1: módváltáskor új, a módnak megfelelő jogosultságú belépés kell */
+      cfg.mode = m; saveCfg(); startPolling();
+    },
     isConfigured() { return !!(cfg.clientId && (cfg.folderId || cfg.fileId)); }
   };
 })();

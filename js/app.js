@@ -1196,8 +1196,8 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
             window.t('Riasztás magas értéknél')),
           h('div',{className:'flex items-center gap-2'},
             h('span',{className:'text-sm font-bold text-purple-800'},window.t('Frissítés (perc)')+':'),
-            h('input',{type:'number',min:'1',max:'60',value:S.cfg.minutes||5,
-              onChange:e=>{S.cfg.minutes=parseInt(e.target.value)||5;S.saveCfg();S.startPolling();rerender();},
+            h(NumInput,{min:'1',max:'60',step:'1',value:S.cfg.minutes||5,def:5,
+              onNum:v=>{S.cfg.minutes=Math.round(v);S.saveCfg();S.startPolling();rerender();},
               className:'w-20 border-2 border-purple-200 rounded-xl px-2 py-1 text-sm'})),
           h('p',{className:'text-[11px] text-purple-500'},window.HBC_I18N.getLang()==='en'
             ?'Note: alerts appear while the app is open or running in the background. Push to a fully closed app would require a central server (prepared for a future upgrade).'
@@ -1293,6 +1293,29 @@ function ModalDialog({modal}){
   );
 }
 
+/* ═══════════ v11.1.3: NumInput — szabad számbevitel mobilon ═══════════
+   Hiba volt: a szám-mezők minden billentyűleütésnél visszaírták az alapértéket
+   (üres/részleges beírás → pl. 10), így telefonon nem lehetett 10-nél kisebb
+   számot beírni. A NumInput gépelés közben a nyers szöveget mutatja, csak
+   érvényes számot ad tovább; az alapértéket és a min/max korlátot a mező
+   elhagyásakor (blur) érvényesíti. Az asztali le-föl nyíl továbbra is működik. */
+function NumInput({value,onNum,def,min,max,step,className,...rest}){
+  const [txt,setTxt]=useState(value==null||value===''?'':String(value));
+  const foc=useRef(false);
+  useEffect(()=>{ if(!foc.current) setTxt(value==null||value===''?'':String(value)); },[value]);
+  const clamp=v=>{ if(min!=null&&v<parseFloat(min))v=parseFloat(min);
+                   if(max!=null&&v>parseFloat(max))v=parseFloat(max); return v; };
+  return h('input',{...rest,type:'number',min,max,step,className,inputMode:'decimal',value:txt,
+    onFocus:()=>{foc.current=true;},
+    onChange:e=>{ const raw=e.target.value; setTxt(raw);
+      const v=parseFloat(String(raw).replace(',','.'));
+      if(!isNaN(v)) onNum(clamp(v)); },
+    onBlur:e=>{ foc.current=false;
+      let v=parseFloat(String(e.target.value).replace(',','.'));
+      v=isNaN(v)?def:clamp(v);
+      setTxt(v==null?'':String(v)); if(v!=null)onNum(v); }});
+}
+
 // ═══════════ BEÁLLÍTÁSOK (v7) ═══════════
 function Settings({settings,onSave}){
   const [s,setS]=useState({...settings});
@@ -1304,8 +1327,8 @@ function Settings({settings,onSave}){
   const uLbl=s.bgUnit==='mgdl'?'mg/dl':'mmol/l';
   const bgField=(label,key,cls,defMmol)=>h('div',null,
     h('label',{className:'text-sm font-bold '+cls+' block mb-1'},t(label)+' ('+uLbl+')'),
-    h('input',{type:'number',step:s.bgUnit==='mgdl'?'1':'0.1',value:dispOf(s[key]),
-      onChange:e=>{const v=storeOf(e.target.value);setS({...s,[key]:v==null?DEFAULT_SETTINGS[key]:v});},className:fi})
+    h(NumInput,{step:s.bgUnit==='mgdl'?'1':'0.1',value:dispOf(s[key]),def:dispOf(DEFAULT_SETTINGS[key]),
+      onNum:v=>setS(p=>({...p,[key]:s.bgUnit==='mgdl'?Math.round(v/18.016*100)/100:v})),className:fi})
   );
   /* v9: inzulinválasztó legördülő — piacon lévő készítmények + egyéni név */
   const insSel=(label,key,list,cls)=>{
@@ -1324,8 +1347,8 @@ function Settings({settings,onSave}){
   /* v8/v9: napszakhatár-mező (óra, 0–23) */
   const hourField=(label,key,def)=>h('div',null,
     h('label',{className:'text-xs font-bold text-gray-500 block mb-1'},label),
-    h('input',{type:'number',min:'0',max:'23',step:'1',value:s[key]!=null?s[key]:def,
-      onChange:e=>{const v=parseInt(e.target.value);setS({...s,[key]:isNaN(v)?def:Math.max(0,Math.min(23,v))});},className:fi}));
+    h(NumInput,{min:'0',max:'23',step:'1',value:s[key]!=null?s[key]:def,def:def,
+      onNum:v=>setS(p=>({...p,[key]:Math.max(0,Math.min(23,Math.round(v)))})),className:fi}));
   return h('div',{className:'space-y-4'},
     card([
       h('h2',{className:'font-black text-gray-800 mb-3'},'⚙️ Személyes beállítások'),
@@ -1403,28 +1426,28 @@ function Settings({settings,onSave}){
         insSel('Bázis inzulin','basalName',BASAL_INSULINS,'text-purple-700'),
         h('div',null,
           h('label',{className:'text-sm font-bold text-indigo-700 block mb-1'},'Inzulin hatásideje (óra)'),
-          h('input',{type:'number',step:'0.5',min:'2',max:'8',value:s.diaHours||4,
-            onChange:e=>setS({...s,diaHours:parseFloat(e.target.value)||4}),className:fi})
+          h(NumInput,{step:'0.5',min:'2',max:'8',value:s.diaHours||4,def:4,
+            onNum:v=>setS(p=>({...p,diaHours:v})),className:fi})
         )
       ),
       h('div',null,
         h('label',{className:'text-sm font-bold text-indigo-700 block mb-1'},t('📐 Inzulin érzékenység (1E gyors inzulin ennyivel csökkent')+' '+uLbl+')'),
-        h('input',{type:'number',step:s.bgUnit==='mgdl'?'1':'0.1',value:dispOf(s.sensitivity),
-          onChange:e=>{const v=storeOf(e.target.value);setS({...s,sensitivity:v==null?2.5:v});},className:fi})
+        h(NumInput,{step:s.bgUnit==='mgdl'?'1':'0.1',value:dispOf(s.sensitivity),def:dispOf(2.5),
+          onNum:v=>setS(p=>({...p,sensitivity:s.bgUnit==='mgdl'?Math.round(v/18.016*100)/100:v})),className:fi})
       ),
       h('div',{className:'mt-4'},
         h('p',{className:'text-sm font-bold text-emerald-700 mb-2'},'CH/inzulin arány (ICR) napszakonként'),
         h('p',{className:'text-xs text-gray-500 mb-2'},'1 egység inzulin ennyi gramm CH-t fedez'),
         h('div',{className:'grid grid-cols-3 gap-3'},
           h('div',null,h('label',{className:'text-xs font-bold text-gray-500 block mb-1'},'Reggel'),
-            h('input',{type:'number',step:'0.5',min:'1',max:'50',value:s.icrMorning||10,
-              onChange:e=>setS({...s,icrMorning:parseFloat(e.target.value)||10}),className:fi})),
+            h(NumInput,{step:'0.5',min:'1',max:'50',value:s.icrMorning||10,def:10,
+              onNum:v=>setS(p=>({...p,icrMorning:v})),className:fi})),
           h('div',null,h('label',{className:'text-xs font-bold text-gray-500 block mb-1'},'Délben'),
-            h('input',{type:'number',step:'0.5',min:'1',max:'50',value:s.icrNoon||10,
-              onChange:e=>setS({...s,icrNoon:parseFloat(e.target.value)||10}),className:fi})),
+            h(NumInput,{step:'0.5',min:'1',max:'50',value:s.icrNoon||10,def:10,
+              onNum:v=>setS(p=>({...p,icrNoon:v})),className:fi})),
           h('div',null,h('label',{className:'text-xs font-bold text-gray-500 block mb-1'},'Este'),
-            h('input',{type:'number',step:'0.5',min:'1',max:'50',value:s.icrEvening||10,
-              onChange:e=>setS({...s,icrEvening:parseFloat(e.target.value)||10}),className:fi}))
+            h(NumInput,{step:'0.5',min:'1',max:'50',value:s.icrEvening||10,def:10,
+              onNum:v=>setS(p=>({...p,icrEvening:v})),className:fi}))
         )
       ),
       h('div',{className:'mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200'},

@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v10.0 Personal APP
+# HBC Diabétesz Napló v11.1 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).
@@ -7,6 +7,20 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 1. **TELEPITESI_UTMUTATO.md** — közzététel (GitHub Pages, ingyenes) + telepítés minden eszközre
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
+
+## Mit tud a v10-hez képest? (v11.1 újdonságok)
+- **Ételek utólagos szerkesztése:** egy már rögzített étkezéshez tartozó
+  ételek a bejegyzés szerkesztő ablakában (ceruza ikon) utólag bővíthetők
+  vagy törölhetők; a szénhidrát-összeg automatikusan újraszámol
+- **Pontosabb szinkron-hibaüzenetek:** a „Szinkron most" gomb kézi
+  indításakor az app pontosan jelzi a hiba okát (lejárt bejelentkezés,
+  hiányzó jogosultság, törölt fájl, nincs internetkapcsolat, hibás
+  Client ID); az időzített, automatikus szinkron csendben fut tovább
+- **App neve a kezdőképernyőn:** a telepített ikon alatt mostantól
+  „HBC Diab Napló" felirat jelenik meg
+- **Nyilvános Google-hozzáférés:** a Drive-szinkron Google-engedélyezése
+  mostantól bárki számára elérhető, tesztfelhasználói lista nélkül
+  (lásd DRIVE_BEALLITASI_UTMUTATO.md)
 
 ## Mit tud a v9-hez képest? (v10 újdonságok)
 - **Nagyobb asztali gombsor:** a felső oldalválasztó gombok az app tartalmi

@@ -24,10 +24,14 @@ alábbi lépések ezt a jelenlegi felületet követik.)*
    - Audience: **External** → Next
    - Contact information: a saját e-mail-címed újra → Next
    - Finish → fogadd el a feltételeket
-5. Bal menü → **„Audience"** → görgess a „Test users" részhez → „+ Add users" →
-   add hozzá a SAJÁT e-mail-címed ÉS ANDIÉT → Save
-   (Teszt módban — Publishing status: Testing — max. 100 felhasználó; nektek bőven
-   elég, nem kell Google-felülvizsgálat/verifikáció.)
+5. Ha a Publishing status Testing állapotban marad: bal menü → **„Audience"** →
+   görgess a „Test users" részhez → „+ Add users" → add hozzá a SAJÁT
+   e-mail-címed ÉS ANDIÉT → Save (max. 100 felhasználó, nem kell
+   Google-felülvizsgálat/verifikáció).
+   **Ha ehelyett a Publishing status „In production" állapotra vált**
+   (Audience → „Publish app"), tesztfelhasználói lista NEM szükséges: bárki,
+   aki ismeri a Client ID-t, kapcsolódhat a saját Google-fiókjával. (A HBC
+   Naplo projekt 2026 júliusa óta „In production" állapotban van.)
 6. Bal menü → **„Clients"** → „+ Create client"
    - Type: **Web application**; név: bármi lehet (pl. HBC Naplo Web)
    - „Authorized JavaScript origins" → „+ ADD URI": `https://NEVED.github.io`
@@ -66,7 +70,17 @@ Drive-jában, a saját mappájával dolgozik; az adatok párok között nem keve
 - **Riasztás bezárt appnál?** A riasztás nyitott vagy háttérben futó app mellett érkezik.
   Teljesen bezárt apphoz központi szerver kellene — az alapok elő vannak készítve egy
   későbbi bővítéshez.
-- **„Az app nincs ellenőrizve" képernyő jön be.** Teszt módban normális: „Continue" /
-  „Folytatás" gombbal továbbléphetsz — csak a Test users listán lévők férnek hozzá.
+- **„Az app nincs ellenőrizve" képernyő jön be.** Ez csak akkor jelenik meg, ha a
+  Google Cloud projekt még Testing állapotban van: „Continue" / „Folytatás"
+  gombbal továbbléphetsz, de csak a Test users listán lévők férnek hozzá.
+  „In production" állapotban (lásd 1. rész, 5. lépés) ez a képernyő nem
+  jelentkezik.
+- **A „Szinkron most" gomb hibaüzenetet ír ki.** Ez a pontos hibaüzenet (v11.1)
+  segít behatárolni a problémát: lejárt bejelentkezésnél jelentkezz be újra a
+  „Kapcsolódás Google-fiókkal" gombbal; hiányzó jogosultságnál ellenőrizd, hogy
+  a mappa meg van-e osztva; törölt fájlnál válaszd ki újra a mappát; internet
+  hiányában a mentés a következő sikeres próbálkozáskor szinkronizálódik. Az
+  időzített, automatikus szinkron ilyenkor csendben próbálkozik újra, hibaüzenet
+  nélkül.
 - **Token lejárt / újra kér belépést.** Normális működés (kb. óránként); a háttérben
   általában felugró ablak nélkül megújul.

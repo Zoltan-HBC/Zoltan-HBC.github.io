@@ -117,7 +117,7 @@ window.HBC_SYNC = (function () {
     opts.headers = Object.assign({ Authorization: 'Bearer ' + accessToken }, opts.headers || {});
     return fetch('https://www.googleapis.com/' + path, opts).then(r => {
       if (r.status === 401) { clearToken(); } /* lejárt/visszavont token → következő hívás újat kér */
-      if (!r.ok) throw new Error('Drive API hiba: ' + r.status);
+      if (!r.ok) { const e = new Error('Drive API hiba: ' + r.status); e.status = r.status; throw e; }
       return r;
     });
   }
@@ -137,6 +137,19 @@ window.HBC_SYNC = (function () {
         body
       }).then(r => r.json()).then(j2 => { cfg.fileId = j2.id; saveCfg(); return cfg.fileId; });
     });
+  }
+
+  /* ═══ v11.1: EMBERI HIBAÜZENET — pontosan megmondja, hol akadt el ═══ */
+  function humanErr(e) {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'Nincs internetkapcsolat.';
+    const s = e && e.status;
+    if (s === 401) return 'A Google-belépés lejárt — nyomd meg a „Kapcsolódás Google-fiókkal" gombot.';
+    if (s === 403) return 'Nincs hozzáférés a naplófájlhoz — ellenőrizd, hogy a mappa/fájl meg van-e osztva ezzel a fiókkal.';
+    if (s === 404) return 'A naplófájl nem található — válaszd ki újra a megosztott naplót (3️⃣).';
+    const m = (e && e.message) || '';
+    if (/popup|consent|access_denied|interaction|immediate/i.test(m)) return 'Google-belépés szükséges — engedélyezd a felugró ablakban („Kapcsolódás Google-fiókkal").';
+    if (/Failed to fetch|NetworkError|Nem tölthető be/i.test(m)) return 'Nincs internetkapcsolat, vagy a Google nem érhető el.';
+    return m || 'Ismeretlen hiba.';
   }
 
   /* ═══ v11: ÖSSZEFÉSÜLÉS (merge) ═══
@@ -217,9 +230,12 @@ window.HBC_SYNC = (function () {
   }
   /* Kézi „Szinkron most" tulajdonos módban — interaktív token-kérés engedett */
   function syncNow(payloadObj) {
-    if (cfg.mode !== 'owner' || !cfg.clientId || !cfg.folderId) return Promise.reject(new Error('nincs beállítva'));
+    if (cfg.mode !== 'owner') return Promise.reject(new Error('Nem tulajdonos módban van a készülék.'));
+    if (!cfg.clientId) return Promise.reject(new Error('Hiányzik a Google Client ID (1️⃣).'));
+    if (!cfg.folderId) return Promise.reject(new Error('Nincs kiválasztva a Drive-mappa (3️⃣).'));
     clearTimeout(pendingPush);
-    return ensureToken(true).then(() => doPush(payloadObj));
+    return ensureToken(true).then(() => doPush(payloadObj))
+      .catch(e => { throw new Error(humanErr(e)); });
   }
   function ownerAutoSync() {
     if (cfg.mode === 'owner' && cfg.clientId && cfg.folderId && payloadProvider) {
@@ -228,9 +244,14 @@ window.HBC_SYNC = (function () {
   }
 
   /* ── Követő: letöltés + riasztás ── */
-  function pull() {
-    if (cfg.mode !== 'follower' || !cfg.clientId || !cfg.fileId) return Promise.resolve(null);
-    return ensureToken(false)
+  function pull(manual) {
+    /* v11.1: manual=true (Szinkron most gomb) → interaktív Google-belépés is
+       engedett, és a hiba pontos okkal jön vissza; időzített hívásnál csendes. */
+    const pre = cfg.mode !== 'follower' ? 'Nem követő módban van a készülék.'
+      : !cfg.clientId ? 'Hiányzik a Google Client ID (1️⃣).'
+      : !cfg.fileId ? 'Nincs kiválasztva a megosztott naplófájl (3️⃣).' : null;
+    if (pre) return manual ? Promise.reject(new Error(pre)) : Promise.resolve(null);
+    const run = ensureToken(!!manual)
       .then(() => api('drive/v3/files/' + cfg.fileId + '?alt=media'))
       .then(r => r.json())
       .then(j => {
@@ -238,8 +259,8 @@ window.HBC_SYNC = (function () {
         emit('data', j);
         checkAlerts(j);
         return j;
-      })
-      .catch(() => null);
+      });
+    return manual ? run.catch(e => { throw new Error(humanErr(e)); }) : run.catch(() => null);
   }
 
   /* v11: az időzített frissítés MINDKÉT módban fut —

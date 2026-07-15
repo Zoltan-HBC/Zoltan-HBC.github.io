@@ -1,5 +1,11 @@
-/* ═══════════ HBC v8.0 — GOOGLE DRIVE SZINKRON ("Andi mód") ═══════════
-   Tulajdonos mód:  a napló automatikus feltöltése a kiválasztott Drive-mappába.
+/* ═══════════ HBC v11 — GOOGLE DRIVE SZINKRON (kétirányú) ═══════════
+   Tulajdonos mód:  KÉTIRÁNYÚ szinkron — minden feltöltés előtt letölti a
+                    Drive-on lévő naplót, ÖSSZEFÉSÜLI a helyivel, majd az
+                    egyesített naplót tölti fel. Így több saját készülék
+                    (telefonok + asztali gép) is használható egyszerre:
+                    bármelyiken rögzített / módosított / törölt adat
+                    megjelenik a többin (induláskor, előtérbe kerüléskor,
+                    időzítve és a „Szinkron most" gombbal).
    Követő mód:      a megosztott naplófájl időzített beolvasása + riasztások.
    Jogosultság:     drive.file — az app CSAK az általa létrehozott / a felhasználó
                     által kiválasztott fájlhoz fér hozzá, semmi máshoz.
@@ -13,11 +19,13 @@ window.HBC_SYNC = (function () {
   let cfg = { mode: 'off', clientId: '', folderId: '', folderName: '', fileId: '', fileName: '', minutes: 5 };
   let pendingPush = null, pollTimer = null;
   let listeners = { status: [], data: [] };
+  /* v11: a helyi adatok lekérdezője — az app adja meg induláskor.
+     Mindig a localStorage-ból olvas, így sosem ad elavult pillanatképet. */
+  let payloadProvider = null;
 
   function loadCfg() {
     try { Object.assign(cfg, JSON.parse(localStorage.getItem('hbc-drive') || '{}')); } catch (e) {}
-    /* v10.1: token localStorage-ban — az ablak bezárása után is megmarad
-       (a sessionStorage minden induláskor kiürült → felesleges újra-bejelentkezés).
+    /* v10.1: token localStorage-ban — az ablak bezárása után is megmarad.
        A token max. ~1 óráig érvényes, lejárat után csendes megújítás megy először. */
     accessToken = localStorage.getItem('hbc-drive-token') || sessionStorage.getItem('hbc-drive-token') || null;
     tokenExp = parseInt(localStorage.getItem('hbc-drive-exp') || sessionStorage.getItem('hbc-drive-exp') || '0');
@@ -108,7 +116,7 @@ window.HBC_SYNC = (function () {
     opts = opts || {};
     opts.headers = Object.assign({ Authorization: 'Bearer ' + accessToken }, opts.headers || {});
     return fetch('https://www.googleapis.com/' + path, opts).then(r => {
-      if (r.status === 401) { clearToken(); } /* v10.1: lejárt/visszavont token → következő hívás újat kér */
+      if (r.status === 401) { clearToken(); } /* lejárt/visszavont token → következő hívás újat kér */
       if (!r.ok) throw new Error('Drive API hiba: ' + r.status);
       return r;
     });
@@ -131,24 +139,92 @@ window.HBC_SYNC = (function () {
     });
   }
 
-  /* ── Tulajdonos: feltöltés (mentésenként, késleltetve összevonva) ── */
+  /* ═══ v11: ÖSSZEFÉSÜLÉS (merge) ═══
+     Szabályok:
+     - entries/foods: id szerinti UNIÓ → adat SOSEM veszik el pusztán attól,
+       hogy egy másik (akár üres) készülék szinkronizál.
+     - azonos id kétszer (szerkesztés): a nagyobb _mod időbélyegű változat nyer.
+     - törlés: tombstone-lista (deleted: {id, ts, k}) terjeszti a törlést minden
+       készülékre; ha a bejegyzést a törlés UTÁN szerkesztették (_mod > ts),
+       a szerkesztett változat marad meg.
+     - cgm: ts szerinti unió.
+     - settings: a frissebb _mod bélyegű oldal nyer (alapból a helyi). */
+  function merge(remote, local) {
+    remote = remote || {}; local = local || {};
+    const arr = x => Array.isArray(x) ? x : [];
+    const tomb = {};
+    arr(remote.deleted).concat(arr(local.deleted)).forEach(t => {
+      if (!t || t.id == null) return;
+      const k = (t.k || 'e') + ':' + t.id;
+      if (!tomb[k] || (t.ts || 0) > tomb[k].ts) tomb[k] = { id: t.id, ts: t.ts || 0, k: t.k || 'e' };
+    });
+    const mergeById = (a, b, kind) => {
+      const m = {};
+      arr(a).concat(arr(b)).forEach(it => {
+        if (!it || it.id == null) return;
+        const cur = m[it.id];
+        if (!cur || (it._mod || 0) > (cur._mod || 0)) m[it.id] = it;
+      });
+      return Object.keys(m).map(k2 => m[k2]).filter(it => {
+        const t = tomb[kind + ':' + it.id];
+        return !t || (it._mod || 0) > t.ts;
+      });
+    };
+    const entries = mergeById(remote.entries, local.entries, 'e')
+      .sort((x, y) => new Date(y.timestamp) - new Date(x.timestamp));
+    const foods = mergeById(remote.foods, local.foods, 'f');
+    const cg = {};
+    arr(remote.cgm).concat(arr(local.cgm)).forEach(r => { if (r && r.ts) cg[r.ts] = r; });
+    const cgm = Object.keys(cg).map(k2 => cg[k2]).sort((x, y) => new Date(x.ts) - new Date(y.ts));
+    const rs = remote.settings, ls = local.settings;
+    const settings = (rs && ls) ? (((rs._mod || 0) > (ls._mod || 0)) ? rs : ls) : (ls || rs || {});
+    const deleted = Object.keys(tomb).map(k2 => tomb[k2]).sort((x, y) => (y.ts || 0) - (x.ts || 0)).slice(0, 1000);
+    return { entries, foods, cgm, settings, deleted };
+  }
+  function sameData(a, b) {
+    const pick = o => JSON.stringify({ e: o.entries || [], f: o.foods || [], c: o.cgm || [], s: o.settings || {}, d: o.deleted || [] });
+    return pick(a) === pick(b);
+  }
+
+  /* ── Tulajdonos: kétirányú szinkron (letöltés → merge → feltöltés) ── */
   function push(payloadObj) {
     if (cfg.mode !== 'owner' || !cfg.clientId || !cfg.folderId) return;
     clearTimeout(pendingPush);
-    pendingPush = setTimeout(() => doPush(payloadObj), 4000);
+    pendingPush = setTimeout(() => { doPush(payloadObj).catch(() => { /* offline: később pótlódik */ }); }, 4000);
   }
   function doPush(payloadObj) {
-    const body = JSON.stringify(Object.assign({ _hbc: 'v7', _updated: new Date().toISOString() }, payloadObj));
-    ensureToken(false)
+    return ensureToken(false)
       .then(findOrCreateFile)
-      .then(id => api('upload/drive/v3/files/' + id + '?uploadType=media', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body
-      }))
-      .then(() => {
+      .then(id => api('drive/v3/files/' + id + '?alt=media')
+        .then(r => r.text())
+        .then(txt => {
+          /* FONTOS: hálózati hiba fentebb elutasítja a láncot (nincs feltöltés
+             letöltés nélkül) — itt csak a sérült/üres fájl számít üresnek. */
+          let remote = {}; try { remote = JSON.parse(txt) || {}; } catch (e) {}
+          const merged = merge(remote, payloadObj);
+          if (sameData(remote, merged)) return merged; /* nincs változás → nincs írás */
+          const body = JSON.stringify(Object.assign({ _hbc: 'v11', _updated: new Date().toISOString() }, merged));
+          return api('upload/drive/v3/files/' + id + '?uploadType=media', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body
+          }).then(() => merged);
+        }))
+      .then(merged => {
         cfg.lastSync = new Date().toISOString(); saveCfg();
         if (window.HBC_STORE) window.HBC_STORE.markBackup();
-      })
-      .catch(() => { /* offline vagy hiba: következő mentésnél/online eseménynél újra */ });
+        emit('data', merged); /* az app a helyi tárba is átveszi az egyesített naplót */
+        return merged;
+      });
+  }
+  /* Kézi „Szinkron most" tulajdonos módban — interaktív token-kérés engedett */
+  function syncNow(payloadObj) {
+    if (cfg.mode !== 'owner' || !cfg.clientId || !cfg.folderId) return Promise.reject(new Error('nincs beállítva'));
+    clearTimeout(pendingPush);
+    return ensureToken(true).then(() => doPush(payloadObj));
+  }
+  function ownerAutoSync() {
+    if (cfg.mode === 'owner' && cfg.clientId && cfg.folderId && payloadProvider) {
+      doPush(payloadProvider()).catch(() => {});
+    }
   }
 
   /* ── Követő: letöltés + riasztás ── */
@@ -166,11 +242,17 @@ window.HBC_SYNC = (function () {
       .catch(() => null);
   }
 
+  /* v11: az időzített frissítés MINDKÉT módban fut —
+     követő: letöltés; tulajdonos: letöltés+merge+feltöltés. */
   function startPolling() {
     stopPolling();
+    const mins = Math.max(1, cfg.minutes || 5) * 60000;
     if (cfg.mode === 'follower' && cfg.fileId) {
       pull();
-      pollTimer = setInterval(pull, Math.max(1, cfg.minutes || 5) * 60000);
+      pollTimer = setInterval(pull, mins);
+    } else if (cfg.mode === 'owner' && cfg.folderId) {
+      ownerAutoSync();
+      pollTimer = setInterval(ownerAutoSync, mins);
     }
   }
   function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
@@ -215,13 +297,17 @@ window.HBC_SYNC = (function () {
     } catch (e) {}
   }
 
-  /* Online esemény: elmaradt szinkron pótlása */
-  window.addEventListener('online', () => { if (cfg.mode === 'follower') pull(); });
+  /* Online / előtérbe kerülés: elmaradt szinkron azonnali pótlása mindkét módban */
+  window.addEventListener('online', () => { cfg.mode === 'follower' ? pull() : ownerAutoSync(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { cfg.mode === 'follower' ? pull() : ownerAutoSync(); }
+  });
 
   loadCfg();
   return {
-    cfg, on, saveCfg, ensureToken, openPicker, push, pull, startPolling, stopPolling,
-    setMode(m) { cfg.mode = m; saveCfg(); if (m === 'follower') startPolling(); else stopPolling(); },
+    cfg, on, saveCfg, ensureToken, openPicker, push, pull, syncNow, merge, startPolling, stopPolling,
+    setPayloadProvider(fn) { payloadProvider = fn; },
+    setMode(m) { cfg.mode = m; saveCfg(); startPolling(); },
     isConfigured() { return !!(cfg.clientId && (cfg.folderId || cfg.fileId)); }
   };
 })();

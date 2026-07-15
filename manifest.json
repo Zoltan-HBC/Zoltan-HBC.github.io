@@ -1,6 +1,6 @@
 {
-  "name": "HBC Diabétesz Napló v10.0 Type 1 Diabetes APP",
-  "short_name": "HBC Napló",
+  "name": "HBC Diabétesz Napló v11.0 Type 1 Diabetes APP",
+  "short_name": "HBC Diab Napló",
   "description": "Inzulinnal kezelt cukorbetegek személyes naplója – vércukor, szénhidrát, inzulin, statisztika, megosztás.",
   "lang": "hu",
   "start_url": "./index.html",

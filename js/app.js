@@ -86,6 +86,13 @@ const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMon
 function addD(s,n){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
 function subD(n){const d=new Date();d.setDate(d.getDate()-n);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
 function todayStr(){const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
+/* ═══ v11: törlés-nyilvántartás (tombstone) — a törlés minden készülékre átterjed ═══ */
+const getTombs=()=>{try{const t=JSON.parse(localStorage.getItem('hbc-v5-deleted')||'[]');return Array.isArray(t)?t:[];}catch(e){return[];}};
+const addTomb=(id,k)=>{const t=[{id,ts:Date.now(),k},...getTombs()].slice(0,1000);localStorage.setItem('hbc-v5-deleted',JSON.stringify(t));return t;};
+/* v11: a szinkron mindig a friss helyi adatokból dolgozik (localStorage a hiteles forrás) */
+const syncPayload=()=>{const g=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
+  return {entries:g('hbc-v5-entries')||[],foods:g('hbc-v5-foods')||[],settings:g('hbc-v5-settings')||{},deleted:getTombs(),
+    cgm:(window.HBC_CGM?window.HBC_CGM.getRange(subD(1),todayStr()):[])};};
 function getDate(ts){return ts?ts.split('T')[0]:'';}
 function fmtTime(ts){if(!ts)return'';return ts.length>=16?ts.slice(11,16):ts;}
 function fmtDT(ts){
@@ -595,7 +602,7 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
 <table><thead><tr><th>${R('Időpont','Time')}</th><th>${R('Típus','Type')}</th><th>${R('VC','BG')} (${UL})</th><th>CH (g)</th><th>${esc(rapidN)} (E)</th><th>${esc(basalN)} (E)</th><th>${R('Megjegyzés','Notes')}</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <div class="warn">⚠️ ${R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!','This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!')}</div>
-<div class="foot"><span>${R('HBC Diabétesz Napló v10.0 Type 1 Diabetes APP','HBC Diabetes Diary v10.0 Type 1 Diabetes APP')}</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
+<div class="foot"><span>${R('HBC Diabétesz Napló v11.0 Type 1 Diabetes APP','HBC Diabetes Diary v11.0 Type 1 Diabetes APP')}</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
 <script>setTimeout(function(){window.print();},400);</script>
 </body></html>`;
   const win=window.open('','_blank');
@@ -1071,7 +1078,7 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
   /* ── Drive-varázsló műveletek ── */
   const setClientId=v=>{S.cfg.clientId=v.trim();S.saveCfg();rerender();};
   const connect=()=>{setBusy(true);S.ensureToken(true).then(()=>{setBusy(false);rerender();}).catch(err=>{setBusy(false);showAlert&&showAlert('❌ '+err.message);});};
-  const pickFolder=()=>{S.openPicker('folder').then(r=>{S.cfg.folderId=r.id;S.cfg.folderName=r.name;S.cfg.fileId='';S.saveCfg();S.push({entries,foods:allFoods,settings});rerender();}).catch(()=>{});};
+  const pickFolder=()=>{S.openPicker('folder').then(r=>{S.cfg.folderId=r.id;S.cfg.folderName=r.name;S.cfg.fileId='';S.saveCfg();S.push(syncPayload());rerender();}).catch(()=>{});};
   const pickFile=()=>{S.openPicker('file').then(r=>{S.cfg.fileId=r.id;S.cfg.fileName=r.name;S.saveCfg();S.startPolling();rerender();}).catch(()=>{});};
   const disconnect=()=>{S.cfg.mode='off';S.cfg.folderId='';S.cfg.fileId='';S.saveCfg();S.stopPolling();sessionStorage.removeItem('hbc-drive-token');rerender();};
   const askNotif=()=>{
@@ -1119,7 +1126,11 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
         /* állapot */
         S.cfg.lastSync&&h('p',{className:'text-xs text-gray-400'},window.t('Utolsó szinkron')+': '+new Date(S.cfg.lastSync).toLocaleString()),
         h('div',{className:'flex gap-2'},
-          h('button',{type:'button',onClick:()=>{mode==='owner'?S.push({entries,foods:allFoods,settings}):S.pull();rerender();},
+          h('button',{type:'button',onClick:()=>{
+              const done=ok=>{showAlert&&showAlert(ok?'✅ '+window.t('Szinkron kész!'):'❌ '+window.t('A szinkron nem sikerült — ellenőrizd az internetkapcsolatot és a beállítást.'));rerender();};
+              mode==='owner'?S.syncNow(syncPayload()).then(()=>done(true)).catch(()=>done(false))
+                            :S.pull().then(d=>done(!!d));
+            },
             className:'flex-1 bg-indigo-600 text-white font-bold py-2 rounded-xl text-sm'},'🔄 '+window.t('Szinkron most')),
           h('button',{type:'button',onClick:disconnect,className:'flex-1 border-2 border-gray-200 text-gray-500 font-bold py-2 rounded-xl text-sm'},window.t('Leválasztás'))
         ),
@@ -1505,8 +1516,18 @@ function App(){
     if(window.HBC_STORE)window.HBC_STORE.restore().then(loadAll);
     /* v7: követő mód — Drive-ról érkező adatok fogadása */
     if(window.HBC_SYNC){
-      window.HBC_SYNC.on('data',d=>{if(d&&Array.isArray(d.entries))setFollowerData(d);});
-      if(window.HBC_SYNC.cfg.mode==='follower')window.HBC_SYNC.startPolling();
+      window.HBC_SYNC.setPayloadProvider(syncPayload); /* v11: mindig a friss helyi adat megy fel */
+      window.HBC_SYNC.on('data',d=>{
+        if(!d)return;
+        if(window.HBC_SYNC.cfg.mode==='follower'){if(Array.isArray(d.entries))setFollowerData(d);return;}
+        /* v11 tulajdonos mód: a Drive-val összefésült napló átvétele a helyi tárba
+           (közvetlen mentés — NEM saveEntries, hogy ne induljon körkörös feltöltés) */
+        if(Array.isArray(d.entries)){setEntries(d.entries);localStorage.setItem('hbc-v5-entries',JSON.stringify(d.entries));}
+        if(Array.isArray(d.foods)&&d.foods.length){setAllFoods(d.foods);localStorage.setItem('hbc-v5-foods',JSON.stringify(d.foods));}
+        if(d.settings&&d.settings._mod){setSettings({...DEFAULT_SETTINGS,...d.settings});localStorage.setItem('hbc-v5-settings',JSON.stringify(d.settings));}
+        if(Array.isArray(d.deleted))localStorage.setItem('hbc-v5-deleted',JSON.stringify(d.deleted));
+      });
+      window.HBC_SYNC.startPolling(); /* v11: tulajdonos módban is fut (induló + időzített szinkron) */
     }
   },[]);
 
@@ -1546,14 +1567,14 @@ function App(){
 
   /* v9: a CGM-mérések is a megosztott csomag részei → a hozzátartozói riasztás
      mindig a legfrissebb AZNAPI értéken alapul */
-  const drivePush=(en,fo,se)=>{if(window.HBC_SYNC)window.HBC_SYNC.push({entries:en,foods:fo,settings:se,
+  const drivePush=(en,fo,se)=>{if(window.HBC_SYNC)window.HBC_SYNC.push({entries:en,foods:fo,settings:se,deleted:getTombs(),
     cgm:(window.HBC_CGM?window.HBC_CGM.getRange(subD(1),todayStr()):[])});};
   const saveEntries=useCallback(arr=>{setEntries(arr);localStorage.setItem('hbc-v5-entries',JSON.stringify(arr));drivePush(arr,allFoods,settings);},[allFoods,settings]);
   const saveFoods=useCallback(arr=>{setAllFoods(arr);localStorage.setItem('hbc-v5-foods',JSON.stringify(arr));drivePush(entries,arr,settings);},[entries,settings]);
-  const saveSettings=s=>{setSettings(s);localStorage.setItem('hbc-v5-settings',JSON.stringify(s));drivePush(entries,allFoods,s);showAlert('✅ Beállítások mentve!');};
+  const saveSettings=s0=>{const s={...s0,_mod:Date.now()};setSettings(s);localStorage.setItem('hbc-v5-settings',JSON.stringify(s));drivePush(entries,allFoods,s);showAlert('✅ Beállítások mentve!');};
 
   const addEntry=e=>{
-    const arr=[{...e,id:Date.now()},...entries];
+    const arr=[{...e,id:Date.now(),_mod:Date.now()},...entries];
     saveEntries(arr);setView('dashboard');
     const low=settings.lowBG!=null?settings.lowBG:3.9;
     const high=settings.highBG!=null?settings.highBG:10.0;
@@ -1572,18 +1593,18 @@ function App(){
       }
     }
   };
-  const updateEntry=u=>{saveEntries(entries.map(e=>e.id===u.id?u:e));setEditingEntry(null);};
-  const deleteEntry=id=>{showConfirm('Törlöd ezt a bejegyzést?',()=>saveEntries(entries.filter(e=>e.id!==id)));};
-  const addFood=f=>saveFoods([...allFoods,{...f,id:'c'+Date.now()}]);
-  const updateFood=(id,u)=>saveFoods(allFoods.map(f=>f.id===id?{...f,...u}:f));
-  const deleteFood=id=>{showConfirm('Törlöd ezt az ételt?',()=>saveFoods(allFoods.filter(f=>f.id!==id)));};
+  const updateEntry=u=>{saveEntries(entries.map(e=>e.id===u.id?{...u,_mod:Date.now()}:e));setEditingEntry(null);};
+  const deleteEntry=id=>{showConfirm('Törlöd ezt a bejegyzést?',()=>{addTomb(id,'e');saveEntries(entries.filter(e=>e.id!==id));});};
+  const addFood=f=>saveFoods([...allFoods,{...f,id:'c'+Date.now(),_mod:Date.now()}]);
+  const updateFood=(id,u)=>saveFoods(allFoods.map(f=>f.id===id?{...f,...u,_mod:Date.now()}:f));
+  const deleteFood=id=>{showConfirm('Törlöd ezt az ételt?',()=>{addTomb(id,'f');saveFoods(allFoods.filter(f=>f.id!==id));});};
 
   const exportCSV=()=>{
     const s=sortedByTS(entries);
     const csv=[['Időpont','Típus','Vércukor ('+window.bgU.label()+')','CH (g)',(settings.rapidName||'Humalog')+' (E)',(settings.basalName||'Lantus')+' (E)','Jegyzetek'].join(','),
       ...s.map(e=>[new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()),e.type||'',e.bloodGlucose?window.bgU.disp(e.bloodGlucose):'',e.carbs||'',e.insulinRapid||'',e.insulinLong||'',`"${(e.notes||'').replace(/"/g,'""')}"`].join(','))
     ].join('\n');
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v10_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v11_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
   };
   const importJSON=txt=>{
     try{let arr=JSON.parse(txt);if(arr&&!Array.isArray(arr)&&Array.isArray(arr.entries))arr=arr.entries;if(!Array.isArray(arr))throw new Error(window.t('Nem tömb!'));const ids=new Set(entries.map(e=>e.id));const newOnes=arr.filter(e=>!ids.has(e.id));saveEntries([...entries,...newOnes]);showAlert(`✅ ${newOnes.length} új bejegyzés importálva.`);}catch(err){showAlert('❌ Hiba: '+err.message);}
@@ -1626,7 +1647,7 @@ function App(){
           h('img',{src:'icons/TypeOneDiab_logo.png',alt:'TypeOneDiab logo',className:'hbc-logo'}),
           h('div',{className:'min-w-0'},
             h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},window.t('HBC Diabétesz Napló')),
-            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v10.0 Type 1 Diabetes APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
+            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v11.0 Type 1 Diabetes APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
           )
         ),
         h('div',{className:'flex items-center gap-2 shrink-0'},

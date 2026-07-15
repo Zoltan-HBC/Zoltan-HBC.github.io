@@ -4,7 +4,7 @@
    induláskor az IndexedDB-ből automatikusan helyreáll. */
 
 window.HBC_STORE = (function () {
-  const DB = 'hbc-diary', STORE = 'kv', KEYS = ['hbc-v5-entries', 'hbc-v5-foods', 'hbc-v5-settings', 'hbc-bgnote', 'hbc-lang', 'hbc-cgm', 'hbc-meta'];
+  const DB = 'hbc-diary', STORE = 'kv', KEYS = ['hbc-v5-entries', 'hbc-v5-foods', 'hbc-v5-settings', 'hbc-v5-deleted', 'hbc-bgnote', 'hbc-lang', 'hbc-cgm', 'hbc-meta'];
   let db = null;
 
   function open() {

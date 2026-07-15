@@ -77,6 +77,8 @@ window.HBC_I18N = (function () {
     'Kapcsolódás Google-fiókkal': 'Connect with Google account',
     'Mappa kiválasztása': 'Choose folder', 'Megosztott napló kiválasztása': 'Choose shared diary',
     'Utolsó szinkron': 'Last sync', 'Szinkron most': 'Sync now', 'Leválasztás': 'Disconnect',
+    'Szinkron kész!': 'Sync complete!',
+    'A szinkron nem sikerült — ellenőrizd az internetkapcsolatot és a beállítást.': 'Sync failed — check your internet connection and setup.',
     'Riasztási beállítások': 'Alert settings', 'Riasztás alacsony értéknél': 'Alert on low glucose',
     'Riasztás magas értéknél': 'Alert on high glucose', 'Értesítések engedélyezése': 'Enable notifications',
     'Frissítés (perc)': 'Refresh interval (min)',

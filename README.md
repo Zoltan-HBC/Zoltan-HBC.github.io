@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v11.1 Personal APP
+# HBC Diabétesz Napló v12.0 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).
@@ -7,6 +7,13 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 1. **TELEPITESI_UTMUTATO.md** — közzététel (GitHub Pages, ingyenes) + telepítés minden eszközre
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
+
+## Mit tud a v11.1-hez képest? (v12.0 újdonságok)
+
+- **🆘 SOS vészhelyzeti funkció**: piros SOS gomb a mobil hamburger menüben és az asztali fejlécben — teljes képernyős segítőlap (elsősegély-lépések, 112-gomb, hozzátartozók egyérintéses hívása, lakcím, "Így kommunikálj velem" jegyzet), magyarul és angolul.
+- **Automatikus SOS-riasztás**: az aznapi legfrissebb mérés a beállított alacsony határ alatt → az SOS-lap magától megjelenik + értesítés; a "Jól vagyok" gombbal zárható.
+- **Orvosi riport hivatalos fejadatokkal**: a beállított teljes név és telefonszám a riport fejlécében; a verziószám automatikusan az aktuális verziót követi.
+- **Szabad számbevitel mobilon**: a Beállítások szám-mezői gépelés közben nem ugranak vissza az alapértékre.
 
 ## Mit tud a v10-hez képest? (v11.1 újdonságok)
 - **Ételek utólagos szerkesztése:** egy már rögzített étkezéshez tartozó

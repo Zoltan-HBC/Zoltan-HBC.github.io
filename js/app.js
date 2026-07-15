@@ -27,6 +27,9 @@ const INIT_FOODS = [
   {id:'d022',name:'Cappuccino Casablanca csokis',carbs:20,unit:'1 adag',isDefault:true},
 ];
 
+/* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
+const APP_VERSION='12.0';
+
 // ═══════════ REACT SHORTHAND ═══════════
 const {useState,useEffect,useRef,useCallback,useMemo,Fragment}=React;
 /* v7: fordító createElement-burkolat — minden szöveg-gyerek és placeholder/title
@@ -572,9 +575,10 @@ tr:nth-child(even) td{background:#fafbff}
 <div class="noprint"><button onclick="window.print()">🖨️ ${R('Nyomtatás / PDF mentés','Print / Save as PDF')}</button></div>
 <div class="hdr"><img src="icons/logo.png" alt="">
   <div><h1>HBC ${R('Diabétesz Napló — Orvosi riport','Diabetes Diary — Medical report')}</h1>
-  <div class="sub">${R('Inzulinnal kezelt cukorbeteg személyes naplója','Personal diary of an insulin-treated person with diabetes')} · v8.0</div></div></div>
+  <div class="sub">${R('Inzulinnal kezelt cukorbeteg személyes naplója','Personal diary of an insulin-treated person with diabetes')} · v${APP_VERSION}</div></div></div>
 <div class="meta">
-  ${settings&&settings.nickname?`<span>${R('Név/becenév','Name/nickname')}: <b>${esc(settings.nickname)}</b></span>`:''}
+  ${settings&&settings.sosName?`<span>${R('Név','Name')}: <b>${esc(settings.sosName)}</b></span>`:(settings&&settings.nickname?`<span>${R('Név/becenév','Name/nickname')}: <b>${esc(settings.nickname)}</b></span>`:'')}
+  ${settings&&settings.sosPhone?`<span>${R('Telefon','Phone')}: <b>${esc(settings.sosPhone)}</b></span>`:''}
   <span>${R('Időszak','Period')}: <b>${fmtD(f)} – ${fmtD(t)}</b> (${dayCount} ${R('nap','days')})</span>
   <span>${R('Mértékegység','Unit')}: <b>${UL}</b></span>
   <span>${R('Céltartomány','Target range')}: <b>${D(_lo)}–${D(_hi)} ${UL}</b></span>
@@ -602,7 +606,7 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
 <table><thead><tr><th>${R('Időpont','Time')}</th><th>${R('Típus','Type')}</th><th>${R('VC','BG')} (${UL})</th><th>CH (g)</th><th>${esc(rapidN)} (E)</th><th>${esc(basalN)} (E)</th><th>${R('Megjegyzés','Notes')}</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <div class="warn">⚠️ ${R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!','This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!')}</div>
-<div class="foot"><span>${R('HBC Diabétesz Napló v11.1 Type 1 Diabetes APP','HBC Diabetes Diary v11.1 Type 1 Diabetes APP')}</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
+<div class="foot"><span>${R('HBC Diabétesz Napló','HBC Diabetes Diary')} v${APP_VERSION} Type 1 Diabetes APP</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
 <script>setTimeout(function(){window.print();},400);</script>
 </body></html>`;
   const win=window.open('','_blank');
@@ -1255,6 +1259,55 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
   );
 }
 
+/* ═══════════ v12: SOS VÉSZHELYZETI LAP — teljes képernyős, segítőknek szóló nézet ═══════════
+   Megnyitás: piros SOS gomb a hamburger menüben (mobil) és a fejlécben (asztali),
+   valamint automatikusan, ha az aznapi legfrissebb mérés kritikusan alacsony. */
+function SOSPage({settings,reading,onClose,autoAlert}){
+  const en=window.HBC_I18N.getLang()==='en';
+  const R=(hu,eng)=>en?eng:hu;
+  const u=window.bgU;
+  const cs=(settings.sosContacts||[]).filter(c=>c&&(c.name||c.phone));
+  return h('div',{className:'fixed inset-0 z-[200] overflow-y-auto',style:{background:'#7f1d1d'}},
+    h('div',{className:'max-w-lg mx-auto px-4 py-6 pb-10'},
+      h('div',{className:'text-center mb-4'},
+        h('p',{className:'text-white font-black leading-tight',style:{fontSize:'26px'}},R('INZULINNAL KEZELT CUKORBETEG','INSULIN-TREATED DIABETIC')),
+        h('p',{className:'text-red-200 font-bold mt-1',style:{fontSize:'17px'}},autoAlert
+          ?R('AUTOMATIKUS RIASZTÁS — kritikusan alacsony vércukor!','AUTOMATIC ALERT — critically low blood glucose!')
+          :R('Rosszul van — valószínűleg alacsony a vércukra','Feeling unwell — blood glucose is probably low')),
+        settings.sosName&&h('p',{className:'text-white font-black mt-2',style:{fontSize:'20px'}},settings.sosName)
+      ),
+      reading&&h('div',{className:'bg-white rounded-2xl p-4 text-center mb-4'},
+        h('p',{className:'font-black text-red-700',style:{fontSize:'34px'}},u.disp(reading.v)+' '+u.label()),
+        h('p',{className:'text-sm font-bold text-red-500'},R('Mért érték','Measured value')+' · '+new Date(reading.ts).toLocaleString(window.HBC_LOCALE()))),
+      h('div',{className:'bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4'},
+        h('p',{className:'font-black text-amber-900 mb-2',style:{fontSize:'18px'}},R('MIT TEGYÉL? — Elsősegély','WHAT TO DO? — First aid')),
+        h('ol',{className:'text-amber-900 font-bold space-y-2',style:{fontSize:'16px',listStyleType:'decimal',paddingLeft:'22px'}},
+          h('li',null,R('Ha nyelni tud: adj neki cukrot, szőlőcukrot vagy cukros üdítőt (NEM lightot)!','If they can swallow: give sugar, glucose tablets or a sugary (NOT diet) drink!')),
+          h('li',null,R('Inzulint SEMMIKÉPP NE adj be neki!','NEVER inject insulin!')),
+          h('li',null,R('Ha eszméletlen: szájon át NE adj semmit — stabil oldalfekvés, és azonnal hívj mentőt!','If unconscious: give NOTHING by mouth — recovery position and call an ambulance immediately!')),
+          h('li',null,R('Ha 15 perc múlva sem javul: hívj mentőt!','If there is no improvement in 15 minutes: call an ambulance!'))
+        )),
+      h('a',{href:'tel:112',className:'block bg-white text-red-700 text-center font-black rounded-2xl py-4 mb-4 shadow-lg',style:{fontSize:'22px',textDecoration:'none'}},'🚑 112 — '+R('MENTŐHÍVÁS','EMERGENCY CALL')),
+      cs.length>0&&h('div',{className:'bg-white rounded-2xl p-4 mb-4'},
+        h('p',{className:'font-black text-gray-800 mb-2',style:{fontSize:'18px'}},'📞 '+R('Értesítendő hozzátartozók','Contacts to notify')),
+        cs.map((c,i)=>h('div',{key:i,className:'flex items-center justify-between gap-2 py-2 border-b border-gray-100'},
+          h('div',{className:'min-w-0'},
+            h('p',{className:'font-black text-gray-800 leading-tight',style:{fontSize:'18px'}},c.name||''),
+            h('p',{className:'text-sm text-gray-500 font-bold'},(c.rel||'')+(c.phone?' · '+c.phone:''))),
+          c.phone&&h('a',{href:'tel:'+String(c.phone).replace(/[\s()-]/g,''),className:'shrink-0 bg-emerald-600 text-white font-black px-4 py-3 rounded-xl',style:{textDecoration:'none',fontSize:'16px'}},'📞 '+R('Hívás','Call'))
+        ))),
+      settings.sosAddress&&h('div',{className:'bg-white rounded-2xl p-4 mb-4'},
+        h('p',{className:'font-black text-gray-800 mb-1'},'🏠 '+R('Lakcím','Home address')),
+        h('p',{className:'text-gray-800 font-bold',style:{fontSize:'18px'}},settings.sosAddress)),
+      settings.sosNote&&h('div',{className:'bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 mb-4'},
+        h('p',{className:'font-black text-blue-900 mb-1',style:{fontSize:'18px'}},'💬 '+R('Így kommunikálj velem','How to communicate with me')),
+        h('p',{className:'text-blue-900 font-bold whitespace-pre-wrap',style:{fontSize:'17px'}},settings.sosNote)),
+      h('button',{type:'button',onClick:onClose,className:'w-full bg-white/20 border-2 border-white text-white font-black rounded-2xl py-4',style:{fontSize:'18px'}},
+        autoAlert?'✅ '+R('JÓL VAGYOK — riasztás bezárása','I AM OK — dismiss alert'):'✖ '+R('Bezárás','Close'))
+    )
+  );
+}
+
 // ═══════════ APP ═══════════
 
 const DEFAULT_SETTINGS={lowBG:3.9,highBG:10.0,targetBG:6.0,sensitivity:2.5,
@@ -1263,7 +1316,9 @@ const DEFAULT_SETTINGS={lowBG:3.9,highBG:10.0,targetBG:6.0,sensitivity:2.5,
   nickname:'',theme:'indigo',motivation:true,darkMode:'light',customBg:null, /* v10: egyéni háttérszín */
   /* v8: felhasználó által módosítható napszakhatárok (óra) */
   mb1:9,mb2:11,mb3:14,mb4:17,mb5:21,   /* étkezéstípus-alapértelmezés: Reggeli-ig, Tízórai-ig, Ebéd-ig, Uzsonna-ig, Vacsora-ig */
-  ib1:10,ib2:16};                       /* bolus-ICR: Reggel-ig, Délben-ig (utána Este) */
+  ib1:10,ib2:16,                        /* bolus-ICR: Reggel-ig, Délben-ig (utána Este) */
+  /* v12: SOS vészhelyzeti adatok — kizárólag a felhasználó eszközén (localStorage) tárolódnak */
+  sosName:'',sosPhone:'',sosAddress:'',sosContacts:[],sosNote:''};
 
 /* v8: extrém vércukorérték-ellenőrzés (mmol/l-ben) — elgépelés-védelem */
 const BG_EXTREME_LOW=2.0, BG_EXTREME_HIGH=25.0;
@@ -1407,6 +1462,48 @@ function Settings({settings,onSave}){
           h('input',{type:'checkbox',checked:s.motivation!==false,
             onChange:e=>setS({...s,motivation:e.target.checked}),className:'w-5 h-5 accent-indigo-600'}),
           'Motivációs elemek (sorozat, haladás, visszajelzés)')
+      )
+    ]),
+    /* ═══ v12: SOS VÉSZHELYZETI ADATOK ═══ */
+    card([
+      h('h2',{className:'font-black text-red-700 mb-1'},'🆘 '+t('Vészhelyzet (SOS)')),
+      h('p',{className:'text-sm text-gray-500 mb-1'},t('Ezek az adatok a menü piros SOS gombjára koppintva jelennek meg — az ismeretlen segítők és a mentők számára.')),
+      h('p',{className:'text-xs text-gray-400 mb-4'},t('Minden adat kizárólag a te eszközödön tárolódik.')),
+      h('div',{className:'grid md:grid-cols-3 gap-4 mb-4'},
+        h('div',null,
+          h('label',{className:'text-sm font-bold text-red-700 block mb-1'},t('Teljes név (Orvosi riporton is)')),
+          h('input',{type:'text',value:s.sosName||'',placeholder:'pl. Jurák Zoltán',
+            onChange:e=>setS({...s,sosName:e.target.value}),className:fi})),
+        h('div',null,
+          h('label',{className:'text-sm font-bold text-red-700 block mb-1'},t('Saját telefonszám (Orvosi riporton is)')),
+          h('input',{type:'tel',value:s.sosPhone||'',placeholder:'pl. +36 30 123 4567',
+            onChange:e=>setS({...s,sosPhone:e.target.value}),className:fi})),
+        h('div',null,
+          h('label',{className:'text-sm font-bold text-red-700 block mb-1'},t('Lakcím')),
+          h('input',{type:'text',value:s.sosAddress||'',placeholder:'pl. 1234 Példaváros, Minta u. 5.',
+            onChange:e=>setS({...s,sosAddress:e.target.value}),className:fi}))
+      ),
+      h('p',{className:'text-sm font-bold text-red-700 mb-2'},'📞 '+t('Értesítendő hozzátartozók')),
+      (s.sosContacts||[]).map((c,i)=>h('div',{key:i,className:'grid grid-cols-[1fr_1fr_1fr_auto] gap-2 mb-2 items-center'},
+        h('input',{type:'text',value:c.name||'',placeholder:t('Név'),
+          onChange:e=>{const l=(s.sosContacts||[]).slice();l[i]={...l[i],name:e.target.value};setS({...s,sosContacts:l});},className:fi}),
+        h('input',{type:'text',value:c.rel||'',placeholder:t('Kapcsolat (pl. párom)'),
+          onChange:e=>{const l=(s.sosContacts||[]).slice();l[i]={...l[i],rel:e.target.value};setS({...s,sosContacts:l});},className:fi}),
+        h('input',{type:'tel',value:c.phone||'',placeholder:t('Telefonszám'),
+          onChange:e=>{const l=(s.sosContacts||[]).slice();l[i]={...l[i],phone:e.target.value};setS({...s,sosContacts:l});},className:fi}),
+        h('button',{type:'button','aria-label':t('Törlés'),
+          onClick:()=>{const l=(s.sosContacts||[]).slice();l.splice(i,1);setS({...s,sosContacts:l});},
+          className:'px-3 py-2 rounded-xl bg-red-50 text-red-600 font-black border border-red-200'},'🗑')
+      )),
+      h('button',{type:'button',onClick:()=>setS({...s,sosContacts:(s.sosContacts||[]).concat([{name:'',rel:'',phone:''}])}),
+        className:'text-sm font-bold text-red-600 border-2 border-red-200 rounded-xl px-4 py-2 mb-4'},'➕ '+t('Hozzátartozó hozzáadása')),
+      (s.sosContacts||[]).length>1&&h('p',{className:'text-xs text-gray-400 mb-3'},t('A lista első tagja a fő értesítendő.')),
+      h('div',null,
+        h('label',{className:'text-sm font-bold text-blue-700 block mb-1'},'💬 '+t('Így kommunikálj velem (szabadon szerkeszthető)')),
+        h('p',{className:'text-xs text-gray-500 mb-1'},t('Saját tapasztalataid alapján írd le a segítőknek, milyen vagy hipoglikémiásan, és hogyan érdemes veled bánni!')),
+        h('textarea',{value:s.sosNote||'',rows:4,
+          placeholder:t('pl. Ilyenkor zavart vagyok, elutasító lehetek — mintha részeg lennék. Nyugodtan, lassan beszélj, ne vitatkozz velem, add a kezembe a szőlőcukrot vagy a cukros üdítőt!'),
+          onChange:e=>setS({...s,sosNote:e.target.value}),className:fi})
       )
     ]),
     card([
@@ -1679,7 +1776,7 @@ function App(){
     const csv=[['Időpont','Típus','Vércukor ('+window.bgU.label()+')','CH (g)',(settings.rapidName||'Humalog')+' (E)',(settings.basalName||'Lantus')+' (E)','Jegyzetek'].join(','),
       ...s.map(e=>[new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()),e.type||'',e.bloodGlucose?window.bgU.disp(e.bloodGlucose):'',e.carbs||'',e.insulinRapid||'',e.insulinLong||'',`"${(e.notes||'').replace(/"/g,'""')}"`].join(','))
     ].join('\n');
-    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v11_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v${APP_VERSION}_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
   };
   const importJSON=txt=>{
     try{let arr=JSON.parse(txt);if(arr&&!Array.isArray(arr)&&Array.isArray(arr.entries))arr=arr.entries;if(!Array.isArray(arr))throw new Error(window.t('Nem tömb!'));const ids=new Set(entries.map(e=>e.id));const newOnes=arr.filter(e=>!ids.has(e.id));saveEntries([...entries,...newOnes]);showAlert(`✅ ${newOnes.length} új bejegyzés importálva.`);}catch(err){showAlert('❌ Hiba: '+err.message);}
@@ -1714,6 +1811,34 @@ function App(){
   const visTabs=tabs.filter(tb=>!(followerMode&&(tb.id==='foods')));
   const go=id=>{setView(id);setMenuOpen(false);};
 
+  /* ═══ v12: SOS-lap — kézi megnyitás + automatikus riasztás kritikusan alacsony értéknél ═══ */
+  const [sosOpen,setSosOpen]=useState(false);
+  const [sosAuto,setSosAuto]=useState(null); /* {v,ts} — az aznapi kritikus mérés */
+  useEffect(()=>{
+    try{
+      const low=effSettings.lowBG!=null?effSettings.lowBG:3.9;
+      const d=new Date();
+      const todayISO=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+      const manual=(effEntries||[]).filter(e=>e&&e.bloodGlucose).map(e=>({ts:e.timestamp,v:parseFloat(e.bloodGlucose)}));
+      const cgm=(window.HBC_CGM?window.HBC_CGM.getRange(todayISO,todayISO):[]).map(r=>({ts:r.ts,v:parseFloat(r.v)}));
+      /* csak AZNAPI mérés riaszt — régebbi (utólag rögzített) érték soha */
+      const all=manual.concat(cgm).filter(r=>!isNaN(r.v)&&String(r.ts).slice(0,10)===todayISO);
+      if(!all.length)return;
+      const newest=all.sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
+      if(newest.v>=low)return;
+      if(localStorage.getItem('hbc-sos-seen')===String(newest.ts))return; /* ugyanarra a mérésre csak egyszer */
+      setSosAuto(newest);
+      if('Notification' in window&&Notification.permission==='granted'){
+        try{new Notification('🆘 HBC SOS — '+window.t('Riasztás alacsony értéknél'),
+          {body:'🩸 '+window.bgU.disp(newest.v)+' '+window.bgU.label(),icon:'icons/icon-192.png',tag:'hbc-sos'});}catch(err){}
+      }
+    }catch(e){}
+  },[effEntries,effSettings.lowBG]);
+  const closeSOS=()=>{
+    if(sosAuto){try{localStorage.setItem('hbc-sos-seen',String(sosAuto.ts));}catch(e){}setSosAuto(null);}
+    setSosOpen(false);
+  };
+
   return h('div',{className:'min-h-screen',style:{background:'linear-gradient(160deg,var(--hbc-bg1,#eef2ff),var(--hbc-bg2,#f5f3ff))'}},
     // ═══ Fejléc: v9 — TypeOneDiab logó + hamburger (mobil) ═══
     h('div',{ref:headerRef,className:'bg-white/80 backdrop-blur-md shadow sticky top-0 z-50 border-b border-indigo-100'},
@@ -1722,10 +1847,14 @@ function App(){
           h('img',{src:'icons/TypeOneDiab_logo.png',alt:'TypeOneDiab logo',className:'hbc-logo'}),
           h('div',{className:'min-w-0'},
             h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},window.t('HBC Diabétesz Napló')),
-            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v11.1 Type 1 Diabetes APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
+            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v'+APP_VERSION+' Type 1 Diabetes APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
           )
         ),
         h('div',{className:'flex items-center gap-2 shrink-0'},
+          /* v12: kompakt SOS gomb — csak asztali nézetben (mobilon a hamburger menüben van) */
+          h('button',{onClick:()=>setSosOpen(true),type:'button','aria-label':'SOS',title:'🆘 SOS — '+window.t('Vészhelyzet'),
+            className:'hidden md:block font-black text-white px-3 py-2 rounded-xl text-sm shadow',
+            style:{background:'#dc2626'}},'🆘'),
           !followerMode&&h('button',{onClick:()=>setView('add'),type:'button',className:'hidden md:block font-bold text-white px-4 py-2 rounded-xl text-sm shadow-lg',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'➕ Új'),
           /* v9: hamburger menü — csak mobilon */
           h('button',{onClick:()=>setMenuOpen(o=>!o),type:'button','aria-label':window.t('Menü'),
@@ -1758,7 +1887,11 @@ function App(){
         ),
         !followerMode&&h('button',{onClick:()=>go('add'),type:'button',
           className:'mt-3 w-full font-black text-white py-3 rounded-2xl shadow-lg',
-          style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'➕ Új bejegyzés')
+          style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'}},'➕ Új bejegyzés'),
+        /* v12: piros SOS gomb a hamburger menü alján */
+        h('button',{onClick:()=>{setSosOpen(true);setMenuOpen(false);},type:'button',
+          className:'mt-2 w-full font-black text-white py-3 rounded-2xl shadow-lg',
+          style:{background:'#dc2626'}},'🆘 SOS — '+window.t('Vészhelyzet'))
       )
     ),
     // v7: követő mód sáv
@@ -1797,6 +1930,8 @@ function App(){
           ))
       )
     ),
+    /* v12: SOS-lap — kézi megnyitásra vagy automatikus riasztásra */
+    (sosOpen||sosAuto)&&h(SOSPage,{settings:effSettings,reading:sosAuto,autoAlert:!!sosAuto,onClose:closeSOS}),
     editingEntry&&h(EditModal,{entry:editingEntry,onSave:updateEntry,onCancel:()=>setEditingEntry(null),settings,showConfirm,allFoods}),
     modal&&h(ModalDialog,{modal}),
     toast&&h('div',{className:'fixed bottom-20 md:bottom-5 left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-2xl shadow-2xl text-white text-sm font-bold',

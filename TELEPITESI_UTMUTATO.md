@@ -1,4 +1,4 @@
-# Telepítési útmutató — HBC Diabétesz Napló v11.1 Personal APP
+# Telepítési útmutató — HBC Diabétesz Napló v12.0 Personal APP
 
 ## Miért kell közzétenni?
 A telepíthetőséghez (és a Drive-szinkronhoz) az appnak HTTPS-címen kell futnia.
@@ -12,13 +12,13 @@ A legegyszerűbb ingyenes megoldás a GitHub Pages — kb. 15 perc, bankkártya 
    (Ellenőrzés: a „General" beállításoknál és a „Settings → Pages" oldalon is
    a TELJES `https://FELHASZNÁLÓNEVED.github.io` névnek kell látszania.)
    → Public → Create
-3. „uploading an existing file" link → NAGYON FONTOS: a HBC_App_v11 mappában lévő
+3. „uploading an existing file" link → NAGYON FONTOS: a HBC_App_v12 mappában lévő
    ÖSSZES fájlt és almappát töltsd fel, de NE magát a mappát!
-   Vagyis: nyisd meg a HBC_App_v11 mappát, jelölj ki MINDENT (Ctrl+A), és azt
+   Vagyis: nyisd meg a HBC_App_v12 mappát, jelölj ki MINDENT (Ctrl+A), és azt
    húzd be (index.html, manifest.json, sw.js + css/, js/, lib/, fonts/, icons/,
    store/ mappák) → Commit changes
-   ❌ HIBÁS: a HBC_App_v11 mappát egyben behúzni — akkor az app a
-   .../HBC_App_v11/ alcímre kerülne, és nem indulna el a főcímen!
+   ❌ HIBÁS: a HBC_App_v12 mappát egyben behúzni — akkor az app a
+   .../HBC_App_v12/ alcímre kerülne, és nem indulna el a főcímen!
 4. Pár perc múlva az app él: `https://FELHASZNÁLÓNEVED.github.io`
    (Ha frissítesz egy fájlt, ugyanígy töltsd fel újra — a telepített appok maguktól frissülnek.)
 

@@ -1945,8 +1945,13 @@ function App(){
         h('div',{className:'flex items-center gap-2 md:gap-3 min-w-0'},
           h('img',{src:'icons/TypeOneDiab_logo.png',alt:'TypeOneDiab logo',className:'hbc-logo'}),
           h('div',{className:'min-w-0'},
-            h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},window.t('HBC Diabétesz Napló')),
-            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v'+APP_VERSION+' Type 1 Diabetes APP ⚡'+(settings.nickname?' — '+settings.nickname:''))
+            /* v12.2.1: követő módban a főcím a naplótulajdonos becenevével egészül ki */
+            h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},
+              window.t('HBC Diabétesz Napló')+(followerMode&&effSettings.nickname
+                ?(window.HBC_I18N.getLang()==='en'?' – “'+effSettings.nickname+'” notes':' – „'+effSettings.nickname+'” jegyzetei'):'')),
+            /* v12.2.1: tulajdonos módban a verziósor: — „becenév” bejegyzései */
+            h('p',{className:'text-xs text-indigo-400 font-semibold'},'v'+APP_VERSION+' Type 1 Diabetes APP ⚡'+(!followerMode&&settings.nickname
+              ?(window.HBC_I18N.getLang()==='en'?' — “'+settings.nickname+'” entries':' — „'+settings.nickname+'” bejegyzései'):''))
           )
         ),
         h('div',{className:'flex items-center gap-2 shrink-0'},

@@ -941,7 +941,7 @@ function AddEntry({onSave,onCancel,allFoods,onAddFood,entries,settings,showAlert
         ),
         form.foods.length>0&&h('div',{className:'space-y-2 mb-2'},
           form.foods.map(f=>h('div',{key:f.fid,className:'flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'},
-            h('div',{className:'flex-1'},h('p',{className:'text-xs font-bold'},f.name),h('p',{className:'text-xs text-gray-500'},`${f.carbs}g × ${f.mult} = ${f.carbs*f.mult}g CH`)),
+            h('div',{className:'flex-1'},h('p',{className:'text-xs font-bold text-gray-800'},f.name),h('p',{className:'text-xs text-gray-500'},`${f.carbs}g × ${f.mult} = ${f.carbs*f.mult}g CH`)),
             h('div',{className:'flex items-center gap-1'},
               h('select',{value:f.mult,onChange:e=>setMult(f.fid,parseInt(e.target.value)),className:'border rounded-lg px-1 py-1 text-xs'},
                 [1,2,3,4,5,6,7,8,9,10].map(n=>h('option',{key:n,value:n},`${n}×`))
@@ -1053,7 +1053,7 @@ function EditModal({entry,onSave,onCancel,settings,showConfirm,allFoods}){
             ),
             (form.foods||[]).length>0&&h('div',{className:'space-y-2 mb-2'},
               form.foods.map(f=>h('div',{key:f.fid,className:'flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'},
-                h('div',{className:'flex-1'},h('p',{className:'text-xs font-bold'},f.name),h('p',{className:'text-xs text-gray-500'},`${f.carbs}g × ${f.mult} = ${(parseFloat(f.carbs)||0)*(parseFloat(f.mult)||1)}g CH`)),
+                h('div',{className:'flex-1'},h('p',{className:'text-xs font-bold text-gray-800'},f.name),h('p',{className:'text-xs text-gray-500'},`${f.carbs}g × ${f.mult} = ${(parseFloat(f.carbs)||0)*(parseFloat(f.mult)||1)}g CH`)),
                 h('div',{className:'flex items-center gap-1'},
                   h('select',{value:f.mult,onChange:e=>setMult(f.fid,parseInt(e.target.value)),className:'border rounded-lg px-1 py-1 text-xs'},
                     [1,2,3,4,5,6,7,8,9,10].map(n=>h('option',{key:n,value:n},`${n}×`))

@@ -77,10 +77,14 @@ window.HBC_SYNC = (function () {
       tokenClient.requestAccessToken({ prompt: promptVal });
     });
   }
-  function ensureToken(interactive) {
+  function ensureToken(interactive, noPopup) {
     /* v12.1: más módhoz kért (más jogosultságú) tárolt token nem használható fel */
     if (accessToken && localStorage.getItem('hbc-drive-scope') !== SCOPE()) clearToken();
     if (accessToken && Date.now() < tokenExp - 60000) return Promise.resolve(accessToken);
+    /* v12.2: időzített (háttér-) körökben SEMMILYEN Google-ablak nem nyílhat —
+       a csendes megújítás is villant egy felugrót, ezért az csak az app
+       indulásakor / előtérbe kerülésekor / gombnyomásra fut. */
+    if (noPopup) return Promise.reject(new Error('no_token_silent'));
     return loadScript('https://accounts.google.com/gsi/client')
       .then(() => requestToken(''))
       .catch(err => {
@@ -217,8 +221,8 @@ window.HBC_SYNC = (function () {
     clearTimeout(pendingPush);
     pendingPush = setTimeout(() => { doPush(payloadObj).catch(() => { /* offline: később pótlódik */ }); }, 4000);
   }
-  function doPush(payloadObj) {
-    return ensureToken(false)
+  function doPush(payloadObj, noPopup) {
+    return ensureToken(false, noPopup)
       .then(findOrCreateFile)
       .then(id => api('drive/v3/files/' + id + '?alt=media')
         .then(r => r.text())
@@ -249,9 +253,9 @@ window.HBC_SYNC = (function () {
     return ensureToken(true).then(() => doPush(payloadObj))
       .catch(e => { throw new Error(humanErr(e)); });
   }
-  function ownerAutoSync() {
+  function ownerAutoSync(noPopup) {
     if (cfg.mode === 'owner' && cfg.clientId && cfg.folderId && payloadProvider) {
-      doPush(payloadProvider()).catch(() => {});
+      doPush(payloadProvider(), noPopup).catch(() => {});
     }
   }
 
@@ -263,7 +267,7 @@ window.HBC_SYNC = (function () {
       : !cfg.clientId ? 'Hiányzik a Google Client ID (1️⃣).'
       : !cfg.fileId ? 'Nincs kiválasztva a megosztott naplófájl (3️⃣).' : null;
     if (pre) return manual ? Promise.reject(new Error(pre)) : Promise.resolve(null);
-    const run = ensureToken(!!manual)
+    const run = ensureToken(!!manual, !manual && pull._quiet)
       .then(() => api('drive/v3/files/' + cfg.fileId + '?alt=media'))
       .then(r => r.json())
       .then(j => {
@@ -281,11 +285,12 @@ window.HBC_SYNC = (function () {
     stopPolling();
     const mins = Math.max(1, cfg.minutes || 5) * 60000;
     if (cfg.mode === 'follower' && cfg.fileId) {
-      pull();
-      pollTimer = setInterval(pull, mins);
+      pull(); /* induló kör: csendes megújítás engedett (max. 1 villanás) */
+      /* v12.2: az időzített körök popup-mentesek */
+      pollTimer = setInterval(() => { pull._quiet = true; pull(); pull._quiet = false; }, mins);
     } else if (cfg.mode === 'owner' && cfg.folderId) {
       ownerAutoSync();
-      pollTimer = setInterval(ownerAutoSync, mins);
+      pollTimer = setInterval(() => ownerAutoSync(true), mins);
     }
   }
   function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }

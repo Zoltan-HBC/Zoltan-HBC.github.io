@@ -28,7 +28,7 @@ const INIT_FOODS = [
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION='12.1';
+const APP_VERSION='12.2';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {useState,useEffect,useRef,useCallback,useMemo,Fragment}=React;
@@ -1262,50 +1262,146 @@ function SyncManager({entries,saveEntries,exportCSV,importJSON,importCSV,showAle
   );
 }
 
-/* ═══════════ v12: SOS VÉSZHELYZETI LAP — teljes képernyős, segítőknek szóló nézet ═══════════
+/* ═══════════ v12.2: SOS VÉSZHELYZETI LAP — segítőknek szóló, teljes képernyős nézet ═══════════
    Megnyitás: piros SOS gomb a hamburger menüben (mobil) és a fejlécben (asztali),
-   valamint automatikusan, ha az aznapi legfrissebb mérés kritikusan alacsony. */
+   valamint automatikusan, ha az aznapi legfrissebb mérés kritikusan alacsony.
+   v12.2 javítások:
+   - MINDEN stílus inline: a lap garantáltan a fejléc/gombsor/alsó sáv FELETT van
+     (az app.css-ből hiányzó z-[200] osztály okozta a takarást), görgethető, és a
+     telefon biztonsági sávjait (kivágás, gesztussáv) is figyelembe veszi;
+   - FIX színvilág: a vészhelyzeti lap világos és sötét témában is PONTOSAN
+     ugyanúgy, maximális kontraszttal jelenik meg (a sötét téma !important
+     felülírásai osztályok híján nem érik el);
+   - a csempék ⠿ fogantyúval húzva átrendezhetők (ujjal és egérrel), a sorrend a
+     készüléken megmarad (hbc-sos-order); alapsorrend: elsősegély → hozzátartozók
+     → 112 → lakcím → jegyzet;
+   - a jegyzet címe a megadott becenévvel egészül ki: „Így kommunikálj velem — a nevem: …”. */
+const SOS_ORDER_KEY='hbc-sos-order';
+const SOS_DEFAULT_ORDER=['aid','contacts','call112','address','note'];
+function sosLoadOrder(){
+  try{
+    const o=JSON.parse(localStorage.getItem(SOS_ORDER_KEY)||'null');
+    if(Array.isArray(o)){
+      const valid=o.filter(k=>SOS_DEFAULT_ORDER.includes(k));
+      SOS_DEFAULT_ORDER.forEach(k=>{if(!valid.includes(k))valid.push(k);});
+      return valid;
+    }
+  }catch(e){}
+  return SOS_DEFAULT_ORDER.slice();
+}
 function SOSPage({settings,reading,onClose,autoAlert}){
   const en=window.HBC_I18N.getLang()==='en';
   const R=(hu,eng)=>en?eng:hu;
   const u=window.bgU;
   const cs=(settings.sosContacts||[]).filter(c=>c&&(c.name||c.phone));
-  return h('div',{className:'fixed inset-0 z-[200] overflow-y-auto',style:{background:'#7f1d1d'}},
-    h('div',{className:'max-w-lg mx-auto px-4 py-6 pb-10'},
-      h('div',{className:'text-center mb-4'},
-        h('p',{className:'text-white font-black leading-tight',style:{fontSize:'26px'}},R('INZULINNAL KEZELT CUKORBETEG','INSULIN-TREATED DIABETIC')),
-        h('p',{className:'text-red-200 font-bold mt-1',style:{fontSize:'17px'}},autoAlert
+  const [order,setOrder]=useState(sosLoadOrder);
+  const [dragKey,setDragKey]=useState(null);
+  const tileRefs=useRef({});
+  const dragInfo=useRef(null);
+  /* húzás: a ⠿ fogantyún pointerrel indul; a mutató y-pozíciója alapján
+     cseréljük a sorrendet; felengedéskor mentés a készülékre */
+  const startDrag=(key,e)=>{
+    e.preventDefault();
+    dragInfo.current={key};
+    setDragKey(key);
+    const move=ev=>{
+      const y=ev.clientY!=null?ev.clientY:(ev.touches&&ev.touches[0]&&ev.touches[0].clientY);
+      if(y==null)return;
+      setOrder(cur=>{
+        const from=cur.indexOf(key);
+        if(from<0)return cur;
+        let to=from;
+        cur.forEach((k,i)=>{
+          if(k===key)return;
+          const el=tileRefs.current[k];
+          if(!el)return;
+          const r=el.getBoundingClientRect();
+          const mid=r.top+r.height/2;
+          if(i<from&&y<mid)to=Math.min(to,i);
+          if(i>from&&y>mid)to=Math.max(to,i);
+        });
+        if(to===from)return cur;
+        const next=cur.slice();next.splice(from,1);next.splice(to,0,key);
+        return next;
+      });
+    };
+    const up=()=>{
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',up);
+      window.removeEventListener('pointercancel',up);
+      dragInfo.current=null;
+      setDragKey(null);
+      setOrder(cur=>{try{localStorage.setItem(SOS_ORDER_KEY,JSON.stringify(cur));}catch(err){}return cur;});
+    };
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up);
+    window.addEventListener('pointercancel',up);
+  };
+  const S={
+    page:{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:100000,background:'#7f1d1d',
+      overflowY:'auto',WebkitOverflowScrolling:'touch',overscrollBehavior:'contain'},
+    wrap:{maxWidth:'480px',margin:'0 auto',
+      padding:'calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 28px) 16px'},
+    card:{background:'#ffffff',borderRadius:'16px',padding:'14px',marginBottom:'12px',position:'relative'},
+    handle:{position:'absolute',top:'6px',right:'10px',cursor:'grab',touchAction:'none',
+      color:'#9ca3af',fontSize:'18px',lineHeight:'1',padding:'6px',userSelect:'none'},
+    h:{fontWeight:'900',color:'#1f2937',fontSize:'18px',margin:'0 0 8px 0'}
+  };
+  const handle=key=>h('span',{style:S.handle,title:R('Húzd a csempe áthelyezéséhez','Drag to move this tile'),
+    onPointerDown:e=>startDrag(key,e)},'⠿');
+  const tile=(key,style,kids)=>h('div',{key,ref:el=>{tileRefs.current[key]=el;},
+    style:Object.assign({},S.card,style||{},dragKey===key?{outline:'3px dashed #fbbf24',opacity:.92}:{})},
+    handle(key),kids);
+  const TILES={
+    aid:()=>tile('aid',{background:'#fef3c7',border:'2px solid #f59e0b'},[
+      h('p',{key:'t',style:{fontWeight:'900',color:'#78350f',fontSize:'18px',margin:'0 0 8px 0'}},R('MIT TEGYÉL? — Elsősegély','WHAT TO DO? — First aid')),
+      h('ol',{key:'l',style:{color:'#78350f',fontWeight:'700',fontSize:'16px',listStyleType:'decimal',paddingLeft:'22px',margin:0}},
+        h('li',{style:{marginBottom:'6px'}},R('Ha nyelni tud: adj neki cukrot, szőlőcukrot vagy cukros üdítőt (NEM lightot)!','If they can swallow: give sugar, glucose tablets or a sugary (NOT diet) drink!')),
+        h('li',{style:{marginBottom:'6px'}},R('Inzulint SEMMIKÉPP NE adj be neki!','NEVER inject insulin!')),
+        h('li',{style:{marginBottom:'6px'}},R('Ha eszméletlen: szájon át NE adj semmit — stabil oldalfekvés, és azonnal hívj mentőt!','If unconscious: give NOTHING by mouth — recovery position and call an ambulance immediately!')),
+        h('li',null,R('Ha 15 perc múlva sem javul: hívj mentőt!','If there is no improvement in 15 minutes: call an ambulance!')))
+    ]),
+    contacts:()=>cs.length?tile('contacts',null,[
+      h('p',{key:'t',style:S.h},'📞 '+R('Értesítendő hozzátartozók','Contacts to notify')),
+      cs.map((c,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px',padding:'8px 0',borderBottom:i<cs.length-1?'1px solid #e5e7eb':'none'}},
+        h('div',{style:{minWidth:0}},
+          h('p',{style:{fontWeight:'900',color:'#1f2937',fontSize:'18px',margin:0,lineHeight:1.2}},c.name||''),
+          h('p',{style:{color:'#6b7280',fontWeight:'700',fontSize:'13px',margin:0}},(c.rel||'')+(c.phone?' · '+c.phone:''))),
+        c.phone&&h('a',{href:'tel:'+String(c.phone).replace(/[\s()-]/g,''),
+          style:{flexShrink:0,background:'#059669',color:'#ffffff',fontWeight:'900',padding:'12px 16px',borderRadius:'12px',textDecoration:'none',fontSize:'16px'}},'📞 '+R('Hívás','Call'))))
+    ]):null,
+    call112:()=>tile('call112',{background:'#ffffff',padding:'0'},[
+      h('a',{key:'a',href:'tel:112',style:{display:'block',color:'#b91c1c',textAlign:'center',fontWeight:'900',padding:'18px 14px',fontSize:'22px',textDecoration:'none'}},'🚑 112 — '+R('MENTŐHÍVÁS','EMERGENCY CALL'))
+    ]),
+    address:()=>settings.sosAddress?tile('address',null,[
+      h('p',{key:'t',style:{fontWeight:'900',color:'#1f2937',margin:'0 0 4px 0',fontSize:'15px'}},'🏠 '+R('Lakcím','Home address')),
+      h('p',{key:'a',style:{color:'#1f2937',fontWeight:'700',fontSize:'18px',margin:0}},settings.sosAddress)
+    ]):null,
+    note:()=>settings.sosNote?tile('note',{background:'#dbeafe',border:'2px solid #3b82f6'},[
+      h('p',{key:'t',style:{fontWeight:'900',color:'#1e3a8a',margin:'0 0 6px 0',fontSize:'18px',paddingRight:'26px'}},
+        '💬 '+R('Így kommunikálj velem','How to communicate with me')+
+        (settings.nickname?R(' — „'+settings.nickname+'” a nevem',' — my name is “'+settings.nickname+'”'):'')),
+      h('p',{key:'n',style:{color:'#1e3a8a',fontWeight:'700',fontSize:'17px',whiteSpace:'pre-wrap',margin:0}},settings.sosNote)
+    ]):null
+  };
+  return h('div',{style:S.page},
+    h('div',{style:S.wrap},
+      h('div',{style:{textAlign:'center',marginBottom:'14px'}},
+        h('p',{style:{color:'#ffffff',fontWeight:'900',fontSize:'26px',lineHeight:1.15,margin:0}},R('INZULINNAL KEZELT CUKORBETEG','INSULIN-TREATED DIABETIC')),
+        h('p',{style:{color:'#fecaca',fontWeight:'700',fontSize:'17px',margin:'6px 0 0 0'}},autoAlert
           ?R('AUTOMATIKUS RIASZTÁS — kritikusan alacsony vércukor!','AUTOMATIC ALERT — critically low blood glucose!')
           :R('Rosszul van — valószínűleg alacsony a vércukra','Feeling unwell — blood glucose is probably low')),
-        settings.sosName&&h('p',{className:'text-white font-black mt-2',style:{fontSize:'20px'}},settings.sosName)
+        settings.sosName&&h('p',{style:{color:'#ffffff',fontWeight:'900',fontSize:'20px',margin:'8px 0 0 0'}},settings.sosName)
       ),
-      reading&&h('div',{className:'bg-white rounded-2xl p-4 text-center mb-4'},
-        h('p',{className:'font-black text-red-700',style:{fontSize:'34px'}},u.disp(reading.v)+' '+u.label()),
-        h('p',{className:'text-sm font-bold text-red-500'},R('Mért érték','Measured value')+' · '+new Date(reading.ts).toLocaleString(window.HBC_LOCALE()))),
-      h('div',{className:'bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4'},
-        h('p',{className:'font-black text-amber-900 mb-2',style:{fontSize:'18px'}},R('MIT TEGYÉL? — Elsősegély','WHAT TO DO? — First aid')),
-        h('ol',{className:'text-amber-900 font-bold space-y-2',style:{fontSize:'16px',listStyleType:'decimal',paddingLeft:'22px'}},
-          h('li',null,R('Ha nyelni tud: adj neki cukrot, szőlőcukrot vagy cukros üdítőt (NEM lightot)!','If they can swallow: give sugar, glucose tablets or a sugary (NOT diet) drink!')),
-          h('li',null,R('Inzulint SEMMIKÉPP NE adj be neki!','NEVER inject insulin!')),
-          h('li',null,R('Ha eszméletlen: szájon át NE adj semmit — stabil oldalfekvés, és azonnal hívj mentőt!','If unconscious: give NOTHING by mouth — recovery position and call an ambulance immediately!')),
-          h('li',null,R('Ha 15 perc múlva sem javul: hívj mentőt!','If there is no improvement in 15 minutes: call an ambulance!'))
-        )),
-      h('a',{href:'tel:112',className:'block bg-white text-red-700 text-center font-black rounded-2xl py-4 mb-4 shadow-lg',style:{fontSize:'22px',textDecoration:'none'}},'🚑 112 — '+R('MENTŐHÍVÁS','EMERGENCY CALL')),
-      cs.length>0&&h('div',{className:'bg-white rounded-2xl p-4 mb-4'},
-        h('p',{className:'font-black text-gray-800 mb-2',style:{fontSize:'18px'}},'📞 '+R('Értesítendő hozzátartozók','Contacts to notify')),
-        cs.map((c,i)=>h('div',{key:i,className:'flex items-center justify-between gap-2 py-2 border-b border-gray-100'},
-          h('div',{className:'min-w-0'},
-            h('p',{className:'font-black text-gray-800 leading-tight',style:{fontSize:'18px'}},c.name||''),
-            h('p',{className:'text-sm text-gray-500 font-bold'},(c.rel||'')+(c.phone?' · '+c.phone:''))),
-          c.phone&&h('a',{href:'tel:'+String(c.phone).replace(/[\s()-]/g,''),className:'shrink-0 bg-emerald-600 text-white font-black px-4 py-3 rounded-xl',style:{textDecoration:'none',fontSize:'16px'}},'📞 '+R('Hívás','Call'))
-        ))),
-      settings.sosAddress&&h('div',{className:'bg-white rounded-2xl p-4 mb-4'},
-        h('p',{className:'font-black text-gray-800 mb-1'},'🏠 '+R('Lakcím','Home address')),
-        h('p',{className:'text-gray-800 font-bold',style:{fontSize:'18px'}},settings.sosAddress)),
-      settings.sosNote&&h('div',{className:'bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 mb-4'},
-        h('p',{className:'font-black text-blue-900 mb-1',style:{fontSize:'18px'}},'💬 '+R('Így kommunikálj velem','How to communicate with me')),
-        h('p',{className:'text-blue-900 font-bold whitespace-pre-wrap',style:{fontSize:'17px'}},settings.sosNote)),
-      h('button',{type:'button',onClick:onClose,className:'w-full bg-white/20 border-2 border-white text-white font-black rounded-2xl py-4',style:{fontSize:'18px'}},
+      reading&&h('div',{style:{background:'#ffffff',borderRadius:'16px',padding:'12px',textAlign:'center',marginBottom:'12px'}},
+        h('p',{style:{fontWeight:'900',color:'#b91c1c',fontSize:'34px',margin:0,lineHeight:1.1}},u.disp(reading.v)+' '+u.label()),
+        h('p',{style:{fontWeight:'700',color:'#ef4444',fontSize:'13px',margin:'4px 0 0 0'}},R('Mért érték','Measured value')+' · '+new Date(reading.ts).toLocaleString(window.HBC_LOCALE()))),
+      order.map(k=>TILES[k]&&TILES[k]()),
+      h('p',{style:{color:'#fca5a5',fontSize:'12px',textAlign:'center',margin:'0 0 10px 0'}},
+        R('A csempék a ⠿ fogantyúval húzva átrendezhetők — a sorrend ezen a készüléken megmarad.','Tiles can be re-arranged by dragging the ⠿ handle — the order is remembered on this device.')),
+      h('button',{type:'button',onClick:onClose,
+        style:{width:'100%',background:'rgba(255,255,255,.15)',border:'2px solid #ffffff',color:'#ffffff',
+          fontWeight:'900',borderRadius:'16px',padding:'16px',fontSize:'18px',cursor:'pointer'}},
         autoAlert?'✅ '+R('JÓL VAGYOK — riasztás bezárása','I AM OK — dismiss alert'):'✖ '+R('Bezárás','Close'))
     )
   );

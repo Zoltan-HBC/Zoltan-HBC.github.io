@@ -109,6 +109,10 @@ window.HBC_I18N = (function () {
     'Riasztási beállítások': 'Alert settings', 'Riasztás alacsony értéknél': 'Alert on low glucose',
     'Riasztás magas értéknél': 'Alert on high glucose', 'Értesítések engedélyezése': 'Enable notifications',
     'Frissítés (perc)': 'Refresh interval (min)',
+    /* ── v12.3: külön inzulin beadási idő ── */
+    'Beadás ideje eltér?': 'Injection time differs?',
+    'Beadás időpontja': 'Injection time',
+    'Vissza a bejegyzés időpontjára': 'Reset to the entry time',
     '📡 CGM adatok importálása (LibreView / Dexcom CSV)': '📡 Import CGM data (LibreView / Dexcom CSV)',
     'CGM CSV fájl kiválasztása': 'Choose CGM CSV file',
     'Nincs még CGM-eszközöd? Az import LibreView/Clarity exportot fogad. Élő eszköz-csatlakozás előkészítve.':

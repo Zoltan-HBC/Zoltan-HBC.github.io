@@ -28,7 +28,7 @@ const INIT_FOODS = [
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION='12.2';
+const APP_VERSION='12.6';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {useState,useEffect,useRef,useCallback,useMemo,Fragment}=React;
@@ -68,13 +68,17 @@ function Icon({name,size=20,cls='',sw=2}){
 }
 
 // ═══════════ IOB ═══════════
+/* v12.3: külön inzulin beadási idők — ha meg van adva, az felülírja a bejegyzés
+   időpontját minden inzulinhoz kötött számításban (IOB, statisztika, grafikon, riport) */
+const rapidTS=e=>(e&&e.insulinRapidTime)||(e&&e.timestamp)||'';
+const basalTS=e=>(e&&e.insulinLongTime)||(e&&e.timestamp)||'';
 function calcIOB(entries,diaHours){
   const now=Date.now();
   let iob=0;
   const DIA=(parseFloat(diaHours)||4)*60; // beállítható hatásidő, alap: 4 óra
   entries.forEach(e=>{
     if(!e.insulinRapid||e.insulinRapid<=0)return;
-    const mins=(now-new Date(e.timestamp))/(60000);
+    const mins=(now-new Date(rapidTS(e)))/(60000);
     if(mins<0||mins>DIA)return;
     const t=mins/DIA;
     const rem=1-t*(1+t*(-0.5+t/3));
@@ -84,6 +88,10 @@ function calcIOB(entries,diaHours){
 }
 
 // ═══════════ DÁTUM SEGÉDFÜGGVÉNYEK ═══════════
+/* v12.6: helyi idejű "ÉÉÉÉ-HH-NNTÓÓ:PP" a datetime-local mezőkhöz — a korábbi
+   toISOString() UTC-t adott, ezért az alapérték eltért a készülék időzónájától */
+const nowLocalDT=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;};
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 /* v7: a hibás, nem használt addDays függvény törölve (mindig a mai napot adta volna vissza) */
 function addD(s,n){const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');}
@@ -131,7 +139,24 @@ function lbl(text){return h('label',{className:'text-sm font-bold text-gray-500 
 function card(children,cls=''){return h('div',{className:'bg-white/95 rounded-2xl shadow-lg p-4 '+(cls||'')},children);}
 
 // ═══════════ BADGE COMPONENT ═══════════
-function Badge({bg,text}){return h('span',{className:`px-2 py-0.5 rounded-full text-xs font-bold ${bg}`},text);}
+function Badge({bg,text}){return h('span',{className:`hbc-badge px-2 py-0.5 rounded-full text-xs font-bold ${bg}`},text);}
+
+/* ═══ v12.3: INZULIN BEADÁSI IDŐ MEZŐ ═══
+   Alapból a bejegyzés időpontja érvényes; az óra gombbal külön beadási idő
+   állítható be (pl. alacsony cukor miatt ELTOLT étkezés utáni bolus).
+   Az ✖ gombbal visszaáll a bejegyzés időpontjára. */
+function InsTimeField({value,base,onChange}){
+  if(!value)return h('button',{type:'button',onClick:()=>onChange(base||nowLocalDT()), /* v12.6: helyi idő */
+    className:'mt-1 w-full text-left text-xs font-bold text-indigo-500 bg-indigo-50 border border-indigo-200 rounded-lg px-2 py-1.5'},
+    '⏰ '+window.t('Beadás ideje eltér?'));
+  return h('div',{className:'mt-1'},
+    h('label',{className:'text-[11px] font-bold text-indigo-500 block mb-0.5'},'⏰ '+window.t('Beadás időpontja')),
+    h('div',{className:'flex gap-1'},
+      h('input',{type:'datetime-local',value,onChange:e=>onChange(e.target.value),
+        className:'flex-1 min-w-0 border-2 border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-indigo-500'}),
+      h('button',{type:'button',onClick:()=>onChange(''),title:window.t('Vissza a bejegyzés időpontjára'),'aria-label':'reset',
+        className:'px-2 rounded-lg bg-gray-100 text-gray-500 text-xs font-bold'},'✖')));
+}
 
 // ═══════════ ENTRY CARD ═══════════
 function EntryCard({entry,onEdit,onDelete,showDate,settings}){
@@ -165,8 +190,9 @@ function EntryCard({entry,onEdit,onDelete,showDate,settings}){
         h('div',{className:'flex flex-wrap gap-1.5'},
           bg&&h(Badge,{bg:bgBadge,text:'🩸 '+window.bgU.disp(bg)+' '+window.bgU.label()}),
           entry.carbs>0&&h(Badge,{bg:'bg-emerald-100 text-emerald-700',text:'🍽️ '+entry.carbs+'g CH'}),
-          entry.insulinRapid>0&&h(Badge,{bg:'bg-blue-100 text-blue-700',text:'💉 '+entry.insulinRapid+'E '+((settings&&settings.rapidName)||'Humalog')}),
-          entry.insulinLong>0&&h(Badge,{bg:'bg-purple-100 text-purple-700',text:'💉 '+entry.insulinLong+'E '+((settings&&settings.basalName)||'Lantus')}),
+          /* v12.3: ha a beadási idő eltér a bejegyzés időpontjától, a címkén ⏰ idő is látszik */
+          entry.insulinRapid>0&&h(Badge,{bg:'bg-blue-100 text-blue-700',text:'💉 '+entry.insulinRapid+'E '+((settings&&settings.rapidName)||'Humalog')+(entry.insulinRapidTime&&entry.insulinRapidTime!==entry.timestamp?' ⏰'+fmtTime(entry.insulinRapidTime):'')}),
+          entry.insulinLong>0&&h(Badge,{bg:'bg-purple-100 text-purple-700',text:'💉 '+entry.insulinLong+'E '+((settings&&settings.basalName)||'Lantus')+(entry.insulinLongTime&&entry.insulinLongTime!==entry.timestamp?' ⏰'+fmtTime(entry.insulinLongTime):'')}),
           entry.activity&&h(Badge,{bg:'bg-yellow-100 text-yellow-700',text:'🏃 '+entry.activity})
         ),
         entry.notes&&h('p',{className:'mt-1 text-xs text-gray-500 italic truncate'},'"'+entry.notes+'"')
@@ -190,9 +216,15 @@ function Dashboard({entries,onEdit,onDelete,settings,onAdd}){
   const last7=useMemo(()=>filterRange(entries,subD(7),tod),[entries]);
   const bgE7=last7.filter(e=>e.bloodGlucose);
   const avgBG=bgE7.length>0?bgE7.reduce((s,e)=>s+parseFloat(e.bloodGlucose),0)/bgE7.length:0;
-  const todIns=todayEs.reduce((s,e)=>s+(parseFloat(e.insulinRapid)||0)+(parseFloat(e.insulinLong)||0),0);
+  /* v12.3: a napi inzulin-összeg és az "Utolsó" a tényleges BEADÁSI időt követi */
+  const todIns=entries.reduce((s,e)=>s
+    +(e.insulinRapid>0&&getDate(rapidTS(e))===tod?parseFloat(e.insulinRapid):0)
+    +(e.insulinLong>0&&getDate(basalTS(e))===tod?parseFloat(e.insulinLong):0),0);
   const todCarbs=todayEs.reduce((s,e)=>s+(parseFloat(e.carbs)||0),0);
-  const lastInsEntry=[...sortedByTS(todayEs.filter(e=>e.insulinRapid>0||e.insulinLong>0))].slice(-1)[0];
+  const lastInsTS=entries.reduce((m,e)=>{
+    if(e.insulinRapid>0&&getDate(rapidTS(e))===tod&&(!m||rapidTS(e)>m))m=rapidTS(e);
+    if(e.insulinLong>0&&getDate(basalTS(e))===tod&&(!m||basalTS(e)>m))m=basalTS(e);
+    return m;},null);
   const latestBG=[...sortedByTS(entries)].reverse().find(e=>e.bloodGlucose);
   const latestVal=latestBG?parseFloat(latestBG.bloodGlucose):null;
   const iob=useMemo(()=>calcIOB(entries,settings&&settings.diaHours),[entries,settings]);
@@ -219,7 +251,7 @@ function Dashboard({entries,onEdit,onDelete,settings,onAdd}){
   const _dHigh=settings&&settings.highBG!=null?settings.highBG:10.0;
   const bgAll7=last7.filter(e=>e.bloodGlucose);
   const tir7=bgAll7.length>0?Math.round(bgAll7.filter(e=>e.bloodGlucose>=_dLow&&e.bloodGlucose<=_dHigh).length/bgAll7.length*100):null;
-  const noBasalToday=!todayEs.some(e=>parseFloat(e.insulinLong)>0);
+  const noBasalToday=!entries.some(e=>parseFloat(e.insulinLong)>0&&getDate(basalTS(e))===tod); /* v12.3: beadási idő szerint */
   const backupOld=window.HBC_STORE&&window.HBC_STORE.daysSinceBackup()>7;
   const bgGrad=v=>v<_dLow?'linear-gradient(135deg,#f59e0b,#f97316)':v>_dHigh?'linear-gradient(135deg,#ef4444,#dc2626)':'linear-gradient(135deg,#10b981,#059669)';
   const bgIcon=v=>v<_dLow?'⚠️':v>_dHigh?'🔺':'✅';
@@ -267,7 +299,7 @@ function Dashboard({entries,onEdit,onDelete,settings,onAdd}){
         h('div',{className:'absolute -right-2 -bottom-4 text-7xl opacity-20 pointer-events-none select-none'},'💉'),
         h('p',{className:'text-xs font-bold opacity-80 mb-1'},'💉 Ma eddig beadott inzulin'),
         h('p',{className:'text-3xl font-black'},todIns.toFixed(1),h('span',{className:'text-sm ml-1'},'E')),
-        lastInsEntry&&h('p',{className:'text-xs opacity-70 mt-1'},`Utolsó: ${fmtTime(lastInsEntry.timestamp)} – ${new Date(lastInsEntry.timestamp).toLocaleDateString(window.HBC_LOCALE(),{month:'long',day:'numeric'})}`),
+        lastInsTS&&h('p',{className:'text-xs opacity-70 mt-1'},`Utolsó: ${fmtTime(lastInsTS)} – ${new Date(lastInsTS).toLocaleDateString(window.HBC_LOCALE(),{month:'long',day:'numeric'})}`),
         iob>0.1&&h('p',{className:'text-xs mt-2 bg-white/20 rounded-lg px-2 py-1 iob-p'},`🔄 IOB: ${iob.toFixed(1)}E aktív`)
       ),
       // Átlag VC
@@ -345,7 +377,19 @@ function Charts({entries,settings}){
   const filtered=useMemo(()=>sortedByTS(filterRange(entries,f,t)),[entries,f,t]);
   const bgD=filtered.filter(e=>e.bloodGlucose);
   const carbD=filtered.filter(e=>e.carbs);
-  const insD=filtered.filter(e=>e.insulinRapid>0||e.insulinLong>0);
+  /* v12.3: az inzulin grafikon a tényleges BEADÁSI időket mutatja — ha a gyors és a
+     bázis ideje eltér egy bejegyzésen belül, külön oszlopot kapnak */
+  const insD=(()=>{const ev=[];
+    filtered.forEach(e=>{
+      const rT=rapidTS(e),bT=basalTS(e);
+      if(e.insulinRapid>0)ev.push({ts:rT,rapid:parseFloat(e.insulinRapid),basal:0});
+      if(e.insulinLong>0){
+        const last=ev[ev.length-1];
+        if(e.insulinRapid>0&&last&&bT===rT)last.basal=parseFloat(e.insulinLong);
+        else ev.push({ts:bT,rapid:0,basal:parseFloat(e.insulinLong)});
+      }
+    });
+    return ev.sort((a,b)=>new Date(a.ts)-new Date(b.ts));})();
   /* v7: küszöbök a beállításokból + CGM-adatok */
   const _lo=(settings&&settings.lowBG!=null)?settings.lowBG:3.9;
   const _hi=(settings&&settings.highBG!=null)?settings.highBG:10.0;
@@ -402,9 +446,9 @@ function Charts({entries,settings}){
       charts.current.ins?.destroy();
       charts.current.ins=new Chart(insR.current.getContext('2d'),{
         type:'bar',
-        data:{labels:insD.map(e=>fmtDT(e.timestamp)),datasets:[
-          {label:((settings&&settings.rapidName)||'Humalog')+' (E)',data:insD.map(e=>e.insulinRapid||0),backgroundColor:'rgba(59,130,246,.7)',borderColor:'#3b82f6',borderWidth:0,borderRadius:8,borderSkipped:false},
-          {label:((settings&&settings.basalName)||'Lantus')+' (E)',data:insD.map(e=>e.insulinLong||0),backgroundColor:'rgba(139,92,246,.7)',borderColor:'#8b5cf6',borderWidth:0,borderRadius:8,borderSkipped:false},
+        data:{labels:insD.map(ev=>fmtDT(ev.ts)),datasets:[
+          {label:((settings&&settings.rapidName)||'Humalog')+' (E)',data:insD.map(ev=>ev.rapid||0),backgroundColor:'rgba(59,130,246,.7)',borderColor:'#3b82f6',borderWidth:0,borderRadius:8,borderSkipped:false},
+          {label:((settings&&settings.basalName)||'Lantus')+' (E)',data:insD.map(ev=>ev.basal||0),backgroundColor:'rgba(139,92,246,.7)',borderColor:'#8b5cf6',borderWidth:0,borderRadius:8,borderSkipped:false},
         ]},
         options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true}}}
       });
@@ -501,8 +545,9 @@ function generateDoctorReport(entries,settings,f,t){
   const hba1c=avg>0?((avg*18+46.7)/28.7).toFixed(1):'–';
   const gmi=avg>0?(3.31+0.02392*avg*18.016).toFixed(1):'–';
   const dayCount=Math.max(1,Math.round((new Date(t+'T00:00:00')-new Date(f+'T00:00:00'))/864e5)+1);
-  const sumRapid=es.reduce((s,e)=>s+(parseFloat(e.insulinRapid)||0),0);
-  const sumBasal=es.reduce((s,e)=>s+(parseFloat(e.insulinLong)||0),0);
+  /* v12.3: az inzulin-összegek a tényleges beadási idő szerint kerülnek az időszakba */
+  const sumRapid=entries.reduce((s,e)=>{const d=getDate(rapidTS(e));return s+(e.insulinRapid>0&&d>=f&&d<=t?parseFloat(e.insulinRapid):0);},0);
+  const sumBasal=entries.reduce((s,e)=>{const d=getDate(basalTS(e));return s+(e.insulinLong>0&&d>=f&&d<=t?parseFloat(e.insulinLong):0);},0);
   const sumCH=es.reduce((s,e)=>s+(parseFloat(e.carbs)||0),0);
   const rapidN=(settings&&settings.rapidName)||'Humalog';
   const basalN=(settings&&settings.basalName)||'Lantus';
@@ -537,8 +582,8 @@ function generateDoctorReport(entries,settings,f,t){
     <td>${esc(fmtAlwaysDT(e.timestamp))}</td><td>${esc(window.t(e.type||''))}${e.mealType?' – '+esc(window.t(e.mealType)):''}</td>
     <td class="num">${e.bloodGlucose?esc(D(e.bloodGlucose)):''}</td>
     <td class="num">${e.carbs?esc(e.carbs):''}</td>
-    <td class="num">${e.insulinRapid?esc(e.insulinRapid):''}</td>
-    <td class="num">${e.insulinLong?esc(e.insulinLong):''}</td>
+    <td class="num">${e.insulinRapid?esc(e.insulinRapid)+(e.insulinRapidTime&&e.insulinRapidTime!==e.timestamp?' ('+esc(fmtTime(e.insulinRapidTime))+')':''):''}</td>
+    <td class="num">${e.insulinLong?esc(e.insulinLong)+(e.insulinLongTime&&e.insulinLongTime!==e.timestamp?' ('+esc(fmtTime(e.insulinLongTime))+')':''):''}</td>
     <td class="notes">${esc(e.notes||'')}</td></tr>`).join('');
 
   const stat=(l,v)=>`<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div></div>`;
@@ -605,6 +650,7 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
 <h2>${R('Részletes napló','Detailed log')} (${es.length})</h2>
 <table><thead><tr><th>${R('Időpont','Time')}</th><th>${R('Típus','Type')}</th><th>${R('VC','BG')} (${UL})</th><th>CH (g)</th><th>${esc(rapidN)} (E)</th><th>${esc(basalN)} (E)</th><th>${R('Megjegyzés','Notes')}</th></tr></thead>
 <tbody>${rows}</tbody></table>
+<p style="font-size:9.5px;color:#6b7280;margin:4px 0 0">${R('A zárójeles idő az inzulin tényleges beadási időpontja, ha az eltér a bejegyzés időpontjától.','Time in parentheses is the actual insulin injection time when it differs from the entry time.')}</p>
 <div class="warn">⚠️ ${R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!','This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!')}</div>
 <div class="foot"><span>${R('HBC Diabétesz Napló','HBC Diabetes Diary')} v${APP_VERSION} Type 1 Diabetes APP</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
 <script>setTimeout(function(){window.print();},400);</script>
@@ -835,8 +881,9 @@ function AddEntry({onSave,onCancel,allFoods,onAddFood,entries,settings,showAlert
   const _B=(k,d)=>{const v=parseFloat(settings&&settings[k]);return isNaN(v)?d:v;};
   const _defMeal=_hh<_B('mb1',9)?'Reggeli':_hh<_B('mb2',11)?'Tízórai':_hh<_B('mb3',14)?'Ebéd':_hh<_B('mb4',17)?'Uzsonna':_hh<_B('mb5',21)?'Vacsora':'Utóvacsora';
   const [form,setForm]=useState({
-    timestamp:new Date().toISOString().slice(0,16),
-    type:'Étkezés',mealType:_defMeal,bloodGlucose:'',carbs:'',insulinRapid:'',insulinLong:'',foods:[],notes:''
+    timestamp:nowLocalDT(), /* v12.6: a készülék időzónája szerinti helyi idő */
+    type:'Étkezés',mealType:_defMeal,bloodGlucose:'',carbs:'',insulinRapid:'',insulinLong:'',
+    insulinRapidTime:'',insulinLongTime:'',foods:[],notes:'' /* v12.3: külön beadási idők */
   });
   const [showPicker,setShowPicker]=useState(false);
   const [fSearch,setFSearch]=useState('');
@@ -883,7 +930,10 @@ function AddEntry({onSave,onCancel,allFoods,onAddFood,entries,settings,showAlert
   const submit=e=>{
     e.preventDefault();
     const _mmol=form.bloodGlucose?window.bgU.toMmol(form.bloodGlucose):null;
-    const doSave=()=>onSave({...form,carbs:totalCH||null,bloodGlucose:_mmol,insulinRapid:form.insulinRapid?parseFloat(form.insulinRapid):null,insulinLong:form.insulinLong?parseFloat(form.insulinLong):null});
+    const doSave=()=>onSave({...form,carbs:totalCH||null,bloodGlucose:_mmol,insulinRapid:form.insulinRapid?parseFloat(form.insulinRapid):null,insulinLong:form.insulinLong?parseFloat(form.insulinLong):null,
+      /* v12.3: beadási idő csak akkor tárolódik, ha van dózis ÉS eltér a bejegyzés időpontjától */
+      insulinRapidTime:(form.insulinRapid&&form.insulinRapidTime&&form.insulinRapidTime!==form.timestamp)?form.insulinRapidTime:null,
+      insulinLongTime:(form.insulinLong&&form.insulinLongTime&&form.insulinLongTime!==form.timestamp)?form.insulinLongTime:null});
     /* v8: extrém érték — megerősítő kérdés mentés előtt */
     const warn=extremeBGWarn(_mmol);
     if(warn&&showConfirm)showConfirm(warn,doSave);else doSave();
@@ -977,9 +1027,12 @@ function AddEntry({onSave,onCancel,allFoods,onAddFood,entries,settings,showAlert
 
       h('div',{className:'grid grid-cols-2 gap-3'},
         h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'💉 '+(((typeof settings!=='undefined')&&settings&&settings.rapidName)||'Humalog')+' (E)'),
-          h('input',{type:'number',step:'0.5',value:form.insulinRapid,onChange:e=>setForm({...form,insulinRapid:e.target.value}),placeholder:'pl. 4',className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'})),
+          h('input',{type:'number',step:'0.5',value:form.insulinRapid,onChange:e=>setForm({...form,insulinRapid:e.target.value}),placeholder:'pl. 4',className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'}),
+          /* v12.3: külön beadási idő — alapból a bejegyzés időpontja */
+          form.insulinRapid&&h(InsTimeField,{value:form.insulinRapidTime,base:form.timestamp,onChange:v=>setForm({...form,insulinRapidTime:v})})),
         (form.type==='Lantus'||form.type==='Étkezés')&&h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'💉 '+(((typeof settings!=='undefined')&&settings&&settings.basalName)||'Lantus')+' (E)'),
-          h('input',{type:'number',step:'0.5',value:form.insulinLong,onChange:e=>setForm({...form,insulinLong:e.target.value}),placeholder:'pl. 10',className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'}))
+          h('input',{type:'number',step:'0.5',value:form.insulinLong,onChange:e=>setForm({...form,insulinLong:e.target.value}),placeholder:'pl. 10',className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'}),
+          form.insulinLong&&h(InsTimeField,{value:form.insulinLongTime,base:form.timestamp,onChange:v=>setForm({...form,insulinLongTime:v})}))
       ),
 
       h('div',null,
@@ -1005,6 +1058,8 @@ function EditModal({entry,onSave,onCancel,settings,showConfirm,allFoods}){
     const fCH=fds.reduce((s,f)=>s+(parseFloat(f.carbs)||0)*f.mult,0);
     const extra=Math.max(0,(parseFloat(entry.carbs)||0)-fCH);
     return {...entry,foods:fds,timestamp:entry.timestamp?.slice(0,16),
+      insulinRapidTime:entry.insulinRapidTime?entry.insulinRapidTime.slice(0,16):'', /* v12.3 */
+      insulinLongTime:entry.insulinLongTime?entry.insulinLongTime.slice(0,16):'',
       carbs:extra?String(Math.round(extra*10)/10):'',
       bloodGlucose:entry.bloodGlucose!=null&&entry.bloodGlucose!==''?window.bgU.disp(entry.bloodGlucose):''};
   });
@@ -1019,7 +1074,10 @@ function EditModal({entry,onSave,onCancel,settings,showConfirm,allFoods}){
   const showFoodEd=form.type==='Étkezés'||foodCH>0;
   const submit=e=>{e.preventDefault();
     const _mmol=form.bloodGlucose!==''&&form.bloodGlucose!=null?window.bgU.toMmol(form.bloodGlucose):null;
-    const doSave=()=>onSave({...form,carbs:totalCH||null,bloodGlucose:_mmol});
+    const doSave=()=>onSave({...form,carbs:totalCH||null,bloodGlucose:_mmol,
+      /* v12.3: beadási idő csak dózissal együtt, és csak ha eltér a bejegyzés időpontjától */
+      insulinRapidTime:(form.insulinRapid&&form.insulinRapidTime&&form.insulinRapidTime!==form.timestamp)?form.insulinRapidTime:null,
+      insulinLongTime:(form.insulinLong&&form.insulinLongTime&&form.insulinLongTime!==form.timestamp)?form.insulinLongTime:null});
     /* v8: extrém érték — megerősítő kérdés mentés előtt */
     const warn=extremeBGWarn(_mmol);
     if(warn&&showConfirm)showConfirm(warn,doSave);else doSave();};
@@ -1072,9 +1130,12 @@ function EditModal({entry,onSave,onCancel,settings,showConfirm,allFoods}){
           totalCH>0&&h('p',{className:'text-xs font-black text-indigo-600 mt-1'},window.t('TELJES CH')+`: ${totalCH}g`)),
         h('div',{className:'grid grid-cols-2 gap-3'},
           h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'💉 '+(((typeof settings!=='undefined')&&settings&&settings.rapidName)||'Humalog')+' (E)'),
-            h('input',{type:'number',step:'0.5',value:form.insulinRapid||'',onChange:e=>setForm({...form,insulinRapid:e.target.value}),className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'})),
+            h('input',{type:'number',step:'0.5',value:form.insulinRapid||'',onChange:e=>setForm({...form,insulinRapid:e.target.value}),className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'}),
+            /* v12.3: külön beadási idő */
+            form.insulinRapid&&h(InsTimeField,{value:form.insulinRapidTime,base:form.timestamp,onChange:v=>setForm({...form,insulinRapidTime:v})})),
           h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'💉 '+(((typeof settings!=='undefined')&&settings&&settings.basalName)||'Lantus')+' (E)'),
-            h('input',{type:'number',step:'0.5',value:form.insulinLong||'',onChange:e=>setForm({...form,insulinLong:e.target.value}),className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'}))
+            h('input',{type:'number',step:'0.5',value:form.insulinLong||'',onChange:e=>setForm({...form,insulinLong:e.target.value}),className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'}),
+            form.insulinLong&&h(InsTimeField,{value:form.insulinLongTime,base:form.timestamp,onChange:v=>setForm({...form,insulinLongTime:v})}))
         ),
         h('div',null,h('label',{className:'text-sm font-bold text-gray-500 block mb-1'},'🍽️ Étkezés típusa'),
           h('select',{value:form.mealType||'',onChange:e=>setForm({...form,mealType:e.target.value}),className:'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'},
@@ -1872,8 +1933,9 @@ function App(){
 
   const exportCSV=()=>{
     const s=sortedByTS(entries);
-    const csv=[['Időpont','Típus','Vércukor ('+window.bgU.label()+')','CH (g)',(settings.rapidName||'Humalog')+' (E)',(settings.basalName||'Lantus')+' (E)','Jegyzetek'].join(','),
-      ...s.map(e=>[new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()),e.type||'',e.bloodGlucose?window.bgU.disp(e.bloodGlucose):'',e.carbs||'',e.insulinRapid||'',e.insulinLong||'',`"${(e.notes||'').replace(/"/g,'""')}"`].join(','))
+    /* v12.3: + beadási idő oszlopok a végén (a régi importtal kompatibilis sorrendben) */
+    const csv=[['Időpont','Típus','Vércukor ('+window.bgU.label()+')','CH (g)',(settings.rapidName||'Humalog')+' (E)',(settings.basalName||'Lantus')+' (E)','Jegyzetek',(settings.rapidName||'Humalog')+' beadás',(settings.basalName||'Lantus')+' beadás'].join(','),
+      ...s.map(e=>[new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()),e.type||'',e.bloodGlucose?window.bgU.disp(e.bloodGlucose):'',e.carbs||'',e.insulinRapid||'',e.insulinLong||'',`"${(e.notes||'').replace(/"/g,'""')}"`,e.insulinRapidTime||'',e.insulinLongTime||''].join(','))
     ].join('\n');
     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download=`HBC_v${APP_VERSION}_${todayStr()}.csv`;a.click();if(window.HBC_STORE)window.HBC_STORE.markBackup();
   };
@@ -1886,8 +1948,13 @@ function App(){
       const parse=line=>{const v=[];let cur='',inQ=false;for(const c of line){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){v.push(cur.trim());cur='';}else cur+=c;}v.push(cur.trim());return v;};
       const imported=lines.slice(1).map((line,idx)=>{
         const v=parse(line);let ts;
-        try{const s=v[0].replace(/\.\s*/g,'-').trim();const m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})[T\s\-]+(\d{1,2}):(\d{2})/);ts=m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).toISOString():new Date().toISOString();}catch(e){ts=new Date().toISOString();}
-        return{id:Date.now()+idx,timestamp:ts,type:v[1]||'Étkezés',mealType:'',bloodGlucose:v[2]?parseFloat(v[2]):null,carbs:v[3]?parseFloat(v[3]):null,insulinRapid:v[4]?parseFloat(v[4]):null,insulinLong:v[5]?parseFloat(v[5]):null,notes:(v[6]||'').replace(/^"|"$/g,''),foods:[]};
+        /* v12.6: az importált idő helyi időként tárolódik (nem UTC-re konvertálva),
+           így az órák a készülék időzónáját követik */
+        try{const s=v[0].replace(/\.\s*/g,'-').trim();const m=s.match(/(\d{4})-(\d{1,2})-(\d{1,2})[T\s\-]+(\d{1,2}):(\d{2})/);const p2=n=>String(n).padStart(2,'0');ts=m?`${m[1]}-${p2(+m[2])}-${p2(+m[3])}T${p2(+m[4])}:${m[5]}`:nowLocalDT();}catch(e){ts=nowLocalDT();}
+        /* v12.3: opcionális beadási idő oszlopok (v[7], v[8]) beolvasása */
+        return{id:Date.now()+idx,timestamp:ts,type:v[1]||'Étkezés',mealType:'',bloodGlucose:v[2]?parseFloat(v[2]):null,carbs:v[3]?parseFloat(v[3]):null,insulinRapid:v[4]?parseFloat(v[4]):null,insulinLong:v[5]?parseFloat(v[5]):null,notes:(v[6]||'').replace(/^"|"$/g,''),
+          insulinRapidTime:(v[7]&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v[7]))?v[7].slice(0,16):null,
+          insulinLongTime:(v[8]&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v[8]))?v[8].slice(0,16):null,foods:[]};
       });
       const ids=new Set(entries.map(e=>e.id));const newOnes=imported.filter(e=>!ids.has(e.id));
       saveEntries([...newOnes,...entries]);showAlert(`✅ CSV: ${newOnes.length} új bejegyzés importálva.`);
@@ -1948,10 +2015,10 @@ function App(){
             /* v12.2.1: követő módban a főcím a naplótulajdonos becenevével egészül ki */
             h('h1',{className:'text-lg md:text-2xl font-black truncate',style:{background:'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}},
               window.t('HBC Diabétesz Napló')+(followerMode&&effSettings.nickname
-                ?(window.HBC_I18N.getLang()==='en'?' – “'+effSettings.nickname+'” notes':' – „'+effSettings.nickname+'” jegyzetei'):'')),
-            /* v12.2.1: tulajdonos módban a verziósor: — „becenév” bejegyzései */
+                ?(window.HBC_I18N.getLang()==='en'?' – '+effSettings.nickname+"'s notes":' – '+effSettings.nickname+' jegyzetei'):'')),
+            /* v12.3: tulajdonos módban a verziósor: — Becenév naplója (idézőjel nélkül, csak ha van becenév) */
             h('p',{className:'text-xs text-indigo-400 font-semibold'},'v'+APP_VERSION+' Type 1 Diabetes APP ⚡'+(!followerMode&&settings.nickname
-              ?(window.HBC_I18N.getLang()==='en'?' — “'+settings.nickname+'” entries':' — „'+settings.nickname+'” bejegyzései'):''))
+              ?(window.HBC_I18N.getLang()==='en'?' — '+settings.nickname+"'s diary":' — '+settings.nickname+' naplója'):''))
           )
         ),
         h('div',{className:'flex items-center gap-2 shrink-0'},

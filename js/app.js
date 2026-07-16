@@ -28,7 +28,7 @@ const INIT_FOODS = [
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION='12.9';
+const APP_VERSION='13.0';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {useState,useEffect,useRef,useCallback,useMemo,Fragment}=React;
@@ -488,7 +488,13 @@ function EntriesList({entries,onEdit,onDelete,settings}){
   const {f,t}=mode==='day'?{f:selDate,t:selDate}:{f:fromD,t:toD};
   const filtered=useMemo(()=>{
     let arr=sortedByTS(filterRange(entries,f,t)).reverse();
-    if(typeF!=='all')arr=arr.filter(e=>e.type===typeF);
+    /* v13: a Lantus és az Egyéb tevékenység szűrő TARTALOM szerint is szűr —
+       a bázisinzulin és a mozgás legtöbbször nem külön típusú bejegyzés,
+       hanem egy étkezés/kontroll bejegyzés mezője. Így minden olyan bejegyzés
+       megjelenik, amelyben van bázisdózis, ill. tevékenység. */
+    if(typeF==='Lantus')arr=arr.filter(e=>e.type==='Lantus'||parseFloat(e.insulinLong)>0);
+    else if(typeF==='Egyéb tevékenység')arr=arr.filter(e=>e.type==='Egyéb tevékenység'||(e.activity&&String(e.activity).trim()!==''));
+    else if(typeF!=='all')arr=arr.filter(e=>e.type===typeF);
     return arr;
   },[entries,f,t,typeF]);
 
@@ -501,7 +507,7 @@ function EntriesList({entries,onEdit,onDelete,settings}){
           h('option',{value:'all'},'✅ Összes'),
           h('option',{value:'Étkezés'},'🍽️ Étkezés'),
           h('option',{value:'Kontroll'},'🩸 Kontroll'),
-          h('option',{value:'Lantus'},'💉 Lantus'),
+          h('option',{value:'Lantus'},'💉 '+((settings&&settings.basalName)||'Lantus')), /* v13: a beállított bázisnév */
           h('option',{value:'Egyéb tevékenység'},'🏃 Egyéb tevékenység')
         )
       ),

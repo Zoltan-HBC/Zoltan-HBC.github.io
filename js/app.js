@@ -28,7 +28,7 @@ const INIT_FOODS = [
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION='12.6';
+const APP_VERSION='12.9';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {useState,useEffect,useRef,useCallback,useMemo,Fragment}=React;
@@ -184,7 +184,8 @@ function EntryCard({entry,onEdit,onDelete,showDate,settings}){
       h('div',{className:'flex-1 min-w-0'},
         h('div',{className:'flex items-center gap-2 flex-wrap mb-1.5'},
           h('span',{className:'font-black text-gray-800 text-sm'},entry.type),
-          entry.mealType&&h('span',{className:`text-xs font-bold px-2 py-0.5 rounded-full ${mealC[entry.mealType]||'bg-gray-100 text-gray-600'}`},entry.mealType),
+          /* v12.9: hbc-badge — az étkezés-címke sötét módban is a világos módbeli színeit tartja */
+          entry.mealType&&h('span',{className:`hbc-badge text-xs font-bold px-2 py-0.5 rounded-full ${mealC[entry.mealType]||'bg-gray-100 text-gray-600'}`},entry.mealType),
           h('span',{className:'text-xs text-gray-400 font-mono ml-auto whitespace-nowrap'},fmtAlwaysDT(entry.timestamp))
         ),
         h('div',{className:'flex flex-wrap gap-1.5'},

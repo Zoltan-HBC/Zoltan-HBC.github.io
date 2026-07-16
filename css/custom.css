@@ -127,6 +127,24 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 [data-hbc-dark] .hbc-badge.bg-yellow-100{background-color:#fef9c3!important}
 [data-hbc-dark] .hbc-badge.text-yellow-700{color:#a16207!important}
 
+/* ═══════════ v12.9 FIX — ÉTKEZÉS-CÍMKÉK (Reggeli, Ebéd, Vacsora…) SÖTÉT MÓDBAN ═══════════
+   Az étkezéstípus kis címkéi eddig átszíneződtek sötét módban — kérésre ezek is
+   a világos módbeli színeiket tartják meg, a többi bejegyzés-címkével egységesen. */
+[data-hbc-dark] .hbc-badge.bg-amber-100{background-color:#fef3c7!important}
+[data-hbc-dark] .hbc-badge.text-amber-800{color:#92400e!important}
+[data-hbc-dark] .hbc-badge.bg-lime-100{background-color:#ecfccb!important}
+[data-hbc-dark] .hbc-badge.text-lime-800{color:#3f6212!important}
+[data-hbc-dark] .hbc-badge.bg-sky-100{background-color:#e0f2fe!important}
+[data-hbc-dark] .hbc-badge.text-sky-800{color:#075985!important}
+[data-hbc-dark] .hbc-badge.bg-violet-100{background-color:#ede9fe!important}
+[data-hbc-dark] .hbc-badge.text-violet-800{color:#5b21b6!important}
+[data-hbc-dark] .hbc-badge.bg-rose-100{background-color:#ffe4e6!important}
+[data-hbc-dark] .hbc-badge.text-rose-800{color:#9f1239!important}
+[data-hbc-dark] .hbc-badge.bg-indigo-100{background-color:#e0e7ff!important}
+[data-hbc-dark] .hbc-badge.text-indigo-800{color:#3730a3!important}
+[data-hbc-dark] .hbc-badge.bg-gray-100{background-color:#f3f4f6!important}
+[data-hbc-dark] .hbc-badge.text-gray-600{color:#4b5563!important}
+
 /* ═══════════ v10 FIX — HIÁNYZÓ TAILWIND-OSZTÁLYOK PÓTLÁSA ═══════════
    A css/app.css előre fordított Tailwind-fájl, amelyből a v9/v10-ben
    bevezetett osztályok hiányoznak. Ezek némán nem működtek:

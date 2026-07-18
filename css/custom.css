@@ -205,17 +205,11 @@ input[type=range]{padding:0;border:none;background:transparent}
 .accent-gray-600{accent-color:#4b5563}
 .focus\:border-emerald-400:focus{border-color:#34d399}
 
-/* ═══════════ v14.1 FIX — „EGYÉB TEVÉKENYSÉG" CSEMPE SÖTÉT MÓDBAN ═══════════
+/* ═══════════ v14.2 FIX — „EGYÉB TEVÉKENYSÉG" NAGY CSEMPE SÖTÉT MÓDBAN ═══════════
    A sötét mód a bg-emerald/blue/purple/amber-50 csempeháttereket sötétíti,
    de a bg-yellow-50 (Egyéb tevékenység) KIMARADT: a csempe világossárga
    maradt, miközben a szövegszabályok világosra váltottak → olvashatatlan.
-   Megoldás a badge-javítások (v12.3/v12.9) mintájára: a csempe sötét módban
-   is PONTOSAN a világos módbeli megjelenését tartja — sötét szöveggel. */
-[data-hbc-dark] .ecard.bg-yellow-50{background-color:#fefce8!important;border-color:#fef08a!important}
-[data-hbc-dark] .ecard.bg-yellow-50 .text-gray-800,
-[data-hbc-dark] .ecard.bg-yellow-50 .text-gray-900{color:#1f2937!important}
-[data-hbc-dark] .ecard.bg-yellow-50 .text-gray-500,
-[data-hbc-dark] .ecard.bg-yellow-50 .text-gray-600{color:#6b7280!important}
-[data-hbc-dark] .ecard.bg-yellow-50 .text-gray-400{color:#9ca3af!important}
-[data-hbc-dark] .ecard.bg-yellow-50 .text-indigo-400{color:#818cf8!important}
-[data-hbc-dark] .ecard.bg-yellow-50 .text-purple-400{color:#c084fc!important}
+   Megoldás: a nagy csempe a TÖBBI NAGY CSEMPÉVEL AZONOSAN sötétre vált
+   (a világos szöveget a általános sötét szabályok adják). A kis
+   „Tevékenység" címke (hbc-badge) a v12.3-as fix szerint világos marad. */
+[data-hbc-dark] .bg-yellow-50{background-color:#332e14!important}

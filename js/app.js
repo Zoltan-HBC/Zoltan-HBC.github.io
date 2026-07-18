@@ -5772,6 +5772,7 @@ function AddEntry({
   const _mmol = form.bloodGlucose ? window.bgU.toMmol(form.bloodGlucose) : null;
   /* v14: a típushoz nem tartozó mezők NEM kerülnek mentésre (típusváltás után se) */
   const _isAct = form.type === 'Egyéb tevékenység';
+  const _hasAct = _isAct || form.type === 'Kontroll'; /* tevékenység-mezők Kontrollnál is */
   const _noRapid = form.type === 'Lantus' || _isAct;
   const _hasCH = form.type === 'Étkezés' || form.type === 'Kontroll';
   const doSave = () => onSave({
@@ -5785,10 +5786,10 @@ function AddEntry({
    /* v12.3: beadási idő csak akkor tárolódik, ha van dózis ÉS eltér a bejegyzés időpontjától */
    insulinRapidTime: (!_noRapid && form.insulinRapid && form.insulinRapidTime && form.insulinRapidTime !== form.timestamp) ? form.insulinRapidTime : null,
    insulinLongTime: ((form.type === 'Lantus' || form.type === 'Étkezés') && form.insulinLong && form.insulinLongTime && form.insulinLongTime !== form.timestamp) ? form.insulinLongTime : null,
-   /* v14: tevékenység-adatok csak Egyéb tevékenységnél */
-   activity: _isAct ? (form.activity || '').trim() : '',
-   activityDur: _isAct ? (parseInt(form.activityDur) || 0) : 0,
-   activityLevel: _isAct ? (parseInt(form.activityLevel) || 0) : 0,
+   /* v14: tevékenység-adatok Egyéb tevékenységnél ÉS Kontrollnál */
+   activity: _hasAct ? (form.activity || '').trim() : '',
+   activityDur: _hasAct ? (parseInt(form.activityDur) || 0) : 0,
+   activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
    private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
@@ -6130,8 +6131,9 @@ function AddEntry({
    ),
 
    /* v14: EGYÉB TEVÉKENYSÉG — gyorsválasztó, időtartam, fizikai aktivitás
-      (a gyors inzulin mező helyett) */
-   form.type === 'Egyéb tevékenység' && h(ActivityFields, {
+      (a gyors inzulin mező helyett); Zoltán kérésére a teljes tevékenység-blokk
+      a KONTROLL bejegyzéseknél is elérhető */
+   (form.type === 'Egyéb tevékenység' || form.type === 'Kontroll') && h(ActivityFields, {
     form,
     setForm,
     entries,
@@ -6364,6 +6366,7 @@ function EditModal({
  /* v14: az utólagos szerkesztés mezői PONTOSAN a típusnak megfelelően jelennek meg —
     ugyanúgy, mint az Új bejegyzés űrlapon */
  const _isAct = form.type === 'Egyéb tevékenység';
+ const _hasAct = _isAct || form.type === 'Kontroll'; /* tevékenység-mezők Kontrollnál is */
  const _noRapid = form.type === 'Lantus' || _isAct;
  const _hasCH = form.type === 'Étkezés' || form.type === 'Kontroll';
  const showFoodEd = _hasCH || foodCH > 0;
@@ -6382,10 +6385,10 @@ function EditModal({
    /* v12.3: beadási idő csak dózissal együtt, és csak ha eltér a bejegyzés időpontjától */
    insulinRapidTime: (!_noRapid && form.insulinRapid && form.insulinRapidTime && form.insulinRapidTime !== form.timestamp) ? form.insulinRapidTime : null,
    insulinLongTime: (showLong && form.insulinLong && form.insulinLongTime && form.insulinLongTime !== form.timestamp) ? form.insulinLongTime : null,
-   /* v14: tevékenység-adatok csak Egyéb tevékenységnél */
-   activity: _isAct ? (form.activity || '').trim() : '',
-   activityDur: _isAct ? (parseInt(form.activityDur) || 0) : 0,
-   activityLevel: _isAct ? (parseInt(form.activityLevel) || 0) : 0,
+   /* v14: tevékenység-adatok Egyéb tevékenységnél ÉS Kontrollnál */
+   activity: _hasAct ? (form.activity || '').trim() : '',
+   activityDur: _hasAct ? (parseInt(form.activityDur) || 0) : 0,
+   activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
    private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
@@ -6645,8 +6648,8 @@ function EditModal({
       }, m))
      )),
     /* v14: tevékenység-mezők (gyorsválasztó, időtartam, fizikai aktivitás) —
-       csak Egyéb tevékenységnél, ugyanúgy, mint az Új bejegyzésnél */
-    _isAct && h(ActivityFields, {
+       Egyéb tevékenységnél ÉS Kontrollnál, ugyanúgy, mint az Új bejegyzésnél */
+    _hasAct && h(ActivityFields, {
      form,
      setForm,
      entries,

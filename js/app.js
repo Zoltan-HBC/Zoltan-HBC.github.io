@@ -5789,7 +5789,7 @@ function AddEntry({
    activity: _isAct ? (form.activity || '').trim() : '',
    activityDur: _isAct ? (parseInt(form.activityDur) || 0) : 0,
    activityLevel: _isAct ? (parseInt(form.activityLevel) || 0) : 0,
-   private: !!form.private
+   private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
   const warn = extremeBGWarn(_mmol);
@@ -6154,8 +6154,9 @@ function AddEntry({
     })
    ),
 
-   /* v14: PRIVÁT bejegyzés — csak a Tulajdonos látja, a Követőhöz el sem jut */
-   h('label', {
+   /* v14: PRIVÁT bejegyzés — CSAK Egyéb tevékenységnél állítható;
+      csak a Tulajdonos látja, a Követőhöz el sem jut */
+   form.type === 'Egyéb tevékenység' && h('label', {
      className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
     },
     h('input', {
@@ -6385,7 +6386,7 @@ function EditModal({
    activity: _isAct ? (form.activity || '').trim() : '',
    activityDur: _isAct ? (parseInt(form.activityDur) || 0) : 0,
    activityLevel: _isAct ? (parseInt(form.activityLevel) || 0) : 0,
-   private: !!form.private
+   private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
   const warn = extremeBGWarn(_mmol);
@@ -6663,8 +6664,9 @@ function EditModal({
       rows: 3,
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      })),
-    /* v14: PRIVÁT bejegyzés — csak a Tulajdonos látja, a Követőhöz el sem jut */
-    h('label', {
+    /* v14: PRIVÁT bejegyzés — CSAK Egyéb tevékenységnél állítható;
+       csak a Tulajdonos látja, a Követőhöz el sem jut */
+    _isAct && h('label', {
       className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
      },
      h('input', {

@@ -318,7 +318,7 @@ window.HBC_I18N = (function() {
   'Nagyon megerőltető': 'Very strenuous',
   // ═══ v15: riport küldése e-mailben, orvos-címlista ═══
   'Riport küldése e-mailben az orvosnak': 'Send the report to your doctor by e-mail',
-  'A riport a saját Gmail-fiókodból megy el: a levélben azonnal látható, és csatolt fájlként is megérkezik. Az első küldés előtt a Google egyszeri engedélyt kér.': 'The report is sent from your own Gmail account: it is instantly visible in the message and also arrives as an attached file. Before the first send, Google asks for a one-time permission.',
+  'A riport a saját Gmail-fiókodból megy el hivatalos kísérőlevéllel, maga a riport pedig csatolt, nyomtatható PDF-fájlként érkezik meg az orvoshoz. Az első küldés előtt a Google egyszeri engedélyt kér.': 'The report is sent from your own Gmail account with a formal cover letter, and the report itself arrives as an attached, printable PDF file. Before the first send, Google asks for a one-time permission.',
   'Az orvos e-mail címe': "Doctor's e-mail address",
   'Mentett címek': 'Saved addresses',
   'Szerkesztés': 'Edit',

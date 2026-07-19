@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '15';
+const APP_VERSION = '16';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -4886,6 +4886,7 @@ function generateDoctorReport(entries, settings, f, t, mode) {
  const emailIntro = email ? `<div style="font-size:12.5px;line-height:1.6;margin-bottom:14px">
 ${R('Tisztelt Doktornő / Doktor Úr!','Dear Doctor,')}<br><br>
 ${R('Mellékelten küldöm a diabétesz naplóm orvosi riportját a következő időszakra','Please find attached the medical report of my diabetes diary for the period')}: <b>${fmtD(f)} – ${fmtD(t)}</b>.<br>
+${R('A riport a levél csatolt PDF-fájljában található, megnyitható és nyomtatható.','The report can be found in the attached PDF file of this message; it can be opened and printed.')}<br>
 ${R('A riport a HBC Diabétesz Napló alkalmazással készült.','The report was generated with the HBC Diabetes Diary application.')}<br><br>
 <b>${R('Beteg neve','Patient name')}:</b> ${esc(_pName)}<br>
 ${_pPhone?`<b>${R('Telefonszám','Phone number')}:</b> ${esc(_pPhone)}<br>`:''}
@@ -4960,14 +4961,50 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
 <div class="foot"><span>${R('HBC Diabétesz Napló','HBC Diabetes Diary')} v${APP_VERSION} Type 1 Diabetes APP</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
 ${email?'':'<scr'+'ipt>setTimeout(function(){window.print();},400);</scr'+'ipt>'}
 </body></html>`;
- /* v15: e-mail mód — a hívó állítja össze a MIME-üzenetet */
+ /* v15: e-mail mód — a hívó állítja össze a MIME-üzenetet.
+    v16: + strukturált adatok a PDF-csatolmány felépítéséhez (pdfmake). */
  if (email) return {
   html,
   bgImg,
   patImg,
   pName: _pName,
+  pPhone: _pPhone,
+  pMail: _pMail,
+  intro: emailIntro,
   fmtF: fmtD(f),
-  fmtT: fmtD(t)
+  fmtT: fmtD(t),
+  data: {
+   hu,
+   UL,
+   lo: String(D(_lo)),
+   hi: String(D(_hi)),
+   n,
+   avg: n ? String(D(avg)) : '–',
+   sd: n > 1 ? String(D(sd)) : '–',
+   cv: n > 1 ? cv.toFixed(0) + '%' : '–',
+   tir: tir + '%',
+   hba1c: hba1c + '%',
+   gmi: gmi + '%',
+   nLow: nLow + ' (' + (n ? Math.round(nLow / n * 100) : 0) + '%)',
+   nHigh: nHigh + ' (' + (n ? Math.round(nHigh / n * 100) : 0) + '%)',
+   rapidAvg: (sumRapid / dayCount).toFixed(1) + ' E',
+   basalAvg: (sumBasal / dayCount).toFixed(1) + ' E',
+   chAvg: (sumCH / dayCount).toFixed(0) + ' g',
+   entryCount: es.length,
+   dayCount,
+   rapidN,
+   basalN,
+   generated: new Date().toLocaleString(window.HBC_LOCALE()),
+   rows: es.map(e => [
+    fmtAlwaysDT(e.timestamp),
+    (window.t(e.type || '')) + (e.mealType ? ' – ' + window.t(e.mealType) : ''),
+    e.bloodGlucose ? String(D(e.bloodGlucose)) : '',
+    e.carbs ? String(e.carbs) : '',
+    e.insulinRapid ? String(e.insulinRapid) + (e.insulinRapidTime && e.insulinRapidTime !== e.timestamp ? ' (' + fmtTime(e.insulinRapidTime) + ')' : '') : '',
+    e.insulinLong ? String(e.insulinLong) + (e.insulinLongTime && e.insulinLongTime !== e.timestamp ? ' (' + fmtTime(e.insulinLongTime) + ')' : '') : '',
+    e.notes || ''
+   ])
+  }
  };
  const win = window.open('', '_blank');
  if (!win) return false;
@@ -4993,6 +5030,216 @@ function _mimeWrap(b64) { /* 76 karakteres sorok (RFC 2045) */
 function _encHeaderWord(s) { /* nem-ASCII fejléc-szöveg (Tárgy, név) RFC 2047 */
  return /^[\x20-\x7e]*$/.test(s) ? s : '=?UTF-8?B?' + _b64EncodeUtf8(s) + '?=';
 }
+/* v16: szkript igény szerinti betöltése (pdfmake csak küldéskor töltődik be) */
+function _loadScriptOnce(src) {
+ _loadScriptOnce._done = _loadScriptOnce._done || {};
+ if (_loadScriptOnce._done[src]) return Promise.resolve();
+ return new Promise((res, rej) => {
+  const s = document.createElement('script');
+  s.src = src;
+  s.onload = () => {
+   _loadScriptOnce._done[src] = 1;
+   res();
+  };
+  s.onerror = () => rej(new Error('script_load: ' + src));
+  document.head.appendChild(s);
+ });
+}
+
+/* ═══ v16: RIPORT-PDF ÖSSZEÁLLÍTÁSA (pdfmake) — a csatolmány szép, nyomtatható PDF ═══ */
+function buildReportPdf(rep, logoB64) {
+ const d = rep.data;
+ const hu = d.hu;
+ const R = (a, b) => hu ? a : b;
+ const IND = '#4f46e5', DARK = '#312e81', GRAY = '#6b7280';
+ const kpiCell = (label, value) => ({
+  stack: [{
+   text: label.toUpperCase(),
+   fontSize: 6.5,
+   color: GRAY,
+   bold: true
+  }, {
+   text: value,
+   fontSize: 10.5,
+   bold: true,
+   color: DARK,
+   margin: [0, 2, 0, 0]
+  }],
+  fillColor: '#fafaff',
+  margin: [4, 5, 4, 5],
+  alignment: 'center'
+ });
+ const kpiRow = cells => ({
+  table: {
+   widths: ['*', '*', '*', '*', '*', '*'],
+   body: [cells]
+  },
+  layout: {
+   hLineColor: () => '#e0e7ff',
+   vLineColor: () => '#e0e7ff',
+   hLineWidth: () => 1,
+   vLineWidth: () => 1
+  },
+  margin: [0, 4, 0, 4]
+ });
+ const h2 = txt => ({
+  text: txt,
+  fontSize: 11,
+  bold: true,
+  color: IND,
+  margin: [0, 12, 0, 4]
+ });
+ const tblHeader = [
+  R('Időpont', 'Time'), R('Típus', 'Type'), `${R('VC','BG')} (${d.UL})`, 'CH (g)',
+  `${d.rapidN} (E)`, `${d.basalN} (E)`, R('Megjegyzés', 'Notes')
+ ].map(x => ({
+  text: x,
+  bold: true,
+  fontSize: 7.5,
+  color: DARK,
+  fillColor: '#eef2ff'
+ }));
+ const tblRows = d.rows.map((r, i) => r.map((c, ci) => ({
+  text: c,
+  fontSize: 7.5,
+  color: ci === 6 ? GRAY : '#1f2937',
+  italics: ci === 6,
+  alignment: (ci >= 2 && ci <= 5) ? 'right' : 'left',
+  fillColor: i % 2 ? '#fafbff' : null
+ })));
+ const dd = {
+  pageSize: 'A4',
+  pageMargins: [40, 40, 40, 46],
+  footer: (page, pages) => ({
+   columns: [{
+    text: `HBC ${R('Diabétesz Napló','Diabetes Diary')} v${APP_VERSION} Type 1 Diabetes APP`,
+    fontSize: 7,
+    color: '#9ca3af'
+   }, {
+    text: R('Oldal', 'Page') + `: ${page} / ${pages}`,
+    fontSize: 7,
+    color: '#9ca3af',
+    alignment: 'right'
+   }],
+   margin: [40, 14, 40, 0]
+  }),
+  content: [{
+    columns: [
+     ...(logoB64 ? [{
+      image: 'data:image/png;base64,' + logoB64,
+      width: 44,
+      margin: [0, 0, 10, 0]
+     }] : []),
+     {
+      stack: [{
+       text: 'HBC ' + R('Diabétesz Napló — Orvosi riport', 'Diabetes Diary — Medical report'),
+       fontSize: 15,
+       bold: true,
+       color: IND
+      }, {
+       text: R('Inzulinnal kezelt cukorbeteg személyes naplója', 'Personal diary of an insulin-treated person with diabetes') + ' · v' + APP_VERSION,
+       fontSize: 8.5,
+       color: GRAY,
+       margin: [0, 2, 0, 0]
+      }]
+     }
+    ]
+   }, {
+    canvas: [{
+     type: 'line',
+     x1: 0, y1: 6, x2: 515, y2: 6,
+     lineWidth: 2.2,
+     lineColor: IND
+    }],
+    margin: [0, 0, 0, 8]
+   }, {
+    text: [
+     ...(rep.pName ? [{ text: R('Név', 'Name') + ': ', color: GRAY }, { text: rep.pName + '   ', bold: true, color: IND }] : []),
+     ...(rep.pPhone ? [{ text: R('Telefon', 'Phone') + ': ', color: GRAY }, { text: rep.pPhone + '   ', bold: true, color: IND }] : []),
+     { text: R('Időszak', 'Period') + ': ', color: GRAY }, { text: `${rep.fmtF} – ${rep.fmtT} (${d.dayCount} ${R('nap','days')})   `, bold: true, color: IND },
+     { text: R('Mértékegység', 'Unit') + ': ', color: GRAY }, { text: d.UL + '   ', bold: true, color: IND },
+     { text: R('Céltartomány', 'Target range') + ': ', color: GRAY }, { text: `${d.lo}–${d.hi} ${d.UL}   `, bold: true, color: IND },
+     { text: R('Készült', 'Generated') + ': ', color: GRAY }, { text: d.generated, bold: true, color: IND }
+    ],
+    fontSize: 8.5,
+    margin: [0, 0, 0, 6]
+   },
+   kpiRow([
+    kpiCell(R('Mérések', 'Readings'), String(d.n)),
+    kpiCell(R('Átlag', 'Average'), d.n ? d.avg + ' ' + d.UL : '–'),
+    kpiCell('SD / CV', d.sd + ' / ' + d.cv),
+    kpiCell('TIR', d.tir),
+    kpiCell(R('Becsült HbA1c', 'Est. HbA1c'), d.hba1c),
+    kpiCell('GMI', d.gmi)
+   ]),
+   kpiRow([
+    kpiCell(R('Alacsony esemény', 'Low events'), d.nLow),
+    kpiCell(R('Magas esemény', 'High events'), d.nHigh),
+    kpiCell(d.rapidN + ' ' + R('napi átlag', 'daily avg'), d.rapidAvg),
+    kpiCell(d.basalN + ' ' + R('napi átlag', 'daily avg'), d.basalAvg),
+    kpiCell(R('CH napi átlag', 'Daily avg carbs'), d.chAvg),
+    kpiCell(R('Bejegyzések', 'Entries'), String(d.entryCount))
+   ]),
+   ...(rep.bgImg ? [h2(R('Vércukor-értékek a teljes időszakban', 'Blood glucose over the whole period')), {
+    image: rep.bgImg,
+    width: 515
+   }] : []),
+   ...(rep.patImg ? [h2(R('Napi mintázat (óránkénti átlag)', 'Daily pattern (hourly average)')), {
+    image: rep.patImg,
+    width: 515
+   }] : []),
+   h2(R('Részletes napló', 'Detailed log') + ` (${d.entryCount})`), {
+    table: {
+     headerRows: 1,
+     widths: [78, 72, 38, 30, 52, 52, '*'],
+     body: [tblHeader, ...tblRows]
+    },
+    layout: {
+     hLineColor: () => '#e0e7ff',
+     vLineColor: () => '#eef2ff',
+     hLineWidth: i => i <= 1 ? 1.4 : 0.6,
+     vLineWidth: () => 0.6
+    }
+   }, {
+    text: R('A zárójeles idő az inzulin tényleges beadási időpontja, ha az eltér a bejegyzés időpontjától.', 'Time in parentheses is the actual insulin injection time when it differs from the entry time.'),
+    fontSize: 7.5,
+    color: GRAY,
+    margin: [0, 4, 0, 0]
+   }, {
+    table: {
+     widths: ['*'],
+     body: [[{
+      text: '⚠ ' + R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!', 'This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!'),
+      fontSize: 8,
+      color: '#92400e',
+      fillColor: '#fffbeb',
+      margin: [6, 6, 6, 6]
+     }]]
+    },
+    layout: {
+     hLineColor: () => '#fcd34d',
+     vLineColor: () => '#fcd34d',
+     hLineWidth: () => 1.2,
+     vLineWidth: () => 1.2
+    },
+    margin: [0, 10, 0, 0]
+   }
+  ],
+  defaultStyle: {
+   font: 'Roboto',
+   fontSize: 9,
+   lineHeight: 1.25
+  }
+ };
+ return new Promise((res, rej) => {
+  try {
+   window.pdfMake.createPdf(dd).getBase64(b64 => res(b64));
+  } catch (e) {
+   rej(e);
+  }
+ });
+}
+
 async function sendDoctorReportEmail(entries, settings, f, t, toAddr) {
  const hu = window.HBC_I18N.getLang() !== 'en';
  const rep = generateDoctorReport(entries, settings, f, t, 'email');
@@ -5007,35 +5254,31 @@ async function sendDoctorReportEmail(entries, settings, f, t, toAddr) {
     fr.readAsDataURL(b);
    })).catch(() => '');
  } catch (e) {}
+ /* v16: pdfmake betöltése (helyi fájlok, offline is), majd PDF-csatolmány készítése */
+ await _loadScriptOnce('lib/pdfmake.min.js');
+ await _loadScriptOnce('lib/vfs_fonts.js');
+ const pdfB64 = await buildReportPdf(rep, logoB64);
  const fromMail = (window.HBC_SYNC && window.HBC_SYNC.cfg.accountEmail) || '';
  const subject = (rep.pName ? rep.pName + ' ' : '') +
   (hu ? 'diabétesz riportja' : 'diabetes report') + ' – ' + rep.fmtF + ' – ' + rep.fmtT;
- /* csatolmány: önálló HTML — a cid: hivatkozások beágyazott data: képekre cserélve */
- const attHtml = rep.html
-  .replace(/cid:hbclogo/g, logoB64 ? 'data:image/png;base64,' + logoB64 : '')
-  .replace(/cid:hbcchart1/g, rep.bgImg || '')
-  .replace(/cid:hbcchart2/g, rep.patImg || '');
- const attName = `HBC_riport_${f}_${t}.html`;
- const MIX = 'hbcmix' + Date.now(), REL = 'hbcrel' + Date.now();
- const inlineImg = (cid, b64) => !b64 ? '' :
-  `--${REL}\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <${cid}>\r\nContent-Disposition: inline\r\n\r\n${_mimeWrap(b64)}\r\n`;
- const stripData = d => (d && d.indexOf(',') > -1) ? d.slice(d.indexOf(',') + 1) : '';
+ /* v16: a levél törzse CSAK a hivatalos kísérőszöveg — a riport a csatolt PDF */
+ const bodyHtml = `<!DOCTYPE html><html lang="${hu?'hu':'en'}"><head><meta charset="UTF-8"></head>` +
+  `<body style="font-family:'Segoe UI',Arial,sans-serif;color:#1f2937;font-size:14px">${rep.intro}` +
+  `<p style="font-size:11px;color:#9ca3af">HBC ${hu?'Diabétesz Napló':'Diabetes Diary'} v${APP_VERSION} Type 1 Diabetes APP</p>` +
+  `</body></html>`;
+ const attName = `HBC_riport_${f}_${t}.pdf`;
+ const MIX = 'hbcmix' + Date.now();
  const mime =
   (fromMail ? `From: ${_encHeaderWord(rep.pName || 'HBC Diabétesz Napló')} <${fromMail}>\r\n` : '') +
   `To: ${toAddr}\r\n` +
   `Subject: ${_encHeaderWord(subject)}\r\n` +
   `MIME-Version: 1.0\r\n` +
   `Content-Type: multipart/mixed; boundary="${MIX}"\r\n\r\n` +
-  `--${MIX}\r\nContent-Type: multipart/related; boundary="${REL}"\r\n\r\n` +
-  `--${REL}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n` +
-  `${_mimeWrap(_b64EncodeUtf8(rep.html))}\r\n` +
-  inlineImg('hbclogo', logoB64) +
-  inlineImg('hbcchart1', stripData(rep.bgImg)) +
-  inlineImg('hbcchart2', stripData(rep.patImg)) +
-  `--${REL}--\r\n` +
-  `--${MIX}\r\nContent-Type: text/html; charset=UTF-8; name="${attName}"\r\n` +
+  `--${MIX}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n` +
+  `${_mimeWrap(_b64EncodeUtf8(bodyHtml))}\r\n` +
+  `--${MIX}\r\nContent-Type: application/pdf; name="${attName}"\r\n` +
   `Content-Disposition: attachment; filename="${attName}"\r\nContent-Transfer-Encoding: base64\r\n\r\n` +
-  `${_mimeWrap(_b64EncodeUtf8(attHtml))}\r\n` +
+  `${_mimeWrap(pdfB64)}\r\n` +
   `--${MIX}--`;
  const raw = _b64EncodeUtf8(mime).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
  return window.HBC_SYNC.sendEmail(raw);
@@ -5476,7 +5719,7 @@ function Statistics({
     }, '📧 ' + window.t('Riport küldése e-mailben az orvosnak')),
     h('p', {
      className: 'text-xs text-indigo-700 mb-2'
-    }, window.t('A riport a saját Gmail-fiókodból megy el: a levélben azonnal látható, és csatolt fájlként is megérkezik. Az első küldés előtt a Google egyszeri engedélyt kér.')),
+    }, window.t('A riport a saját Gmail-fiókodból megy el hivatalos kísérőlevéllel, maga a riport pedig csatolt, nyomtatható PDF-fájlként érkezik meg az orvoshoz. Az első küldés előtt a Google egyszeri engedélyt kér.')),
     h('input', {
      type: 'email',
      value: docMail,

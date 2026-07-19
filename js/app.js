@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '16';
+const APP_VERSION = '17';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3912,10 +3912,19 @@ function Dashboard({
   },
 
   /* v7: bázisinzulin-emlékeztető (este) */
-  noBasalToday && new Date().getHours() >= 18 && h('div', {
+  /* v17: bázisinzulin-emlékeztető — beállítható időpont és előjelzés; követőnél SOSEM látszik */
+  noBasalToday && onNoteSave && (settings && settings.basalRemindOn !== false) && (() => {
+   const tStr = (settings && settings.basalRemindTime) || '22:00';
+   const before = (settings && settings.basalRemindBefore != null) ? parseInt(settings.basalRemindBefore) : 60;
+   const parts = /^(\d{1,2}):(\d{2})$/.exec(tStr);
+   const targetMin = parts ? (parseInt(parts[1]) * 60 + parseInt(parts[2])) : 22 * 60;
+   const nowD = new Date();
+   return (nowD.getHours() * 60 + nowD.getMinutes()) >= (targetMin - before);
+  })() && h('div', {
     className: 'p-3 rounded-2xl bg-purple-50 border-2 border-purple-200 text-purple-800 text-sm font-bold'
    },
-   '💜 Ma még nem rögzítettél bázisinzulint.', ' (', (settings && settings.basalName) || 'Lantus', ')'),
+   '💜 Ma még nem rögzítettél bázisinzulint.', ' (', (settings && settings.basalName) || 'Lantus',
+   ') — ', window.t('javasolt beadás') + ': ', (settings && settings.basalRemindTime) || '22:00'),
 
   /* v7: biztonsági mentés-emlékeztető */
   backupOld && h('div', {
@@ -6075,7 +6084,7 @@ function ActivityFields({
    h('input', {
     type: 'range',
     min: '0',
-    max: '720',
+    max: '240', /* v17: a tevékenység-időtartam csúszka 4 óráig (Zoltán kérése) */
     step: '5',
     value: dur,
     onChange: e => setForm(p => ({
@@ -6236,10 +6245,10 @@ function AddEntry({
    mealType: form.type === 'Étkezés' ? form.mealType : '',
    bloodGlucose: _mmol,
    insulinRapid: (!_noRapid && form.insulinRapid) ? parseFloat(form.insulinRapid) : null,
-   insulinLong: ((form.type === 'Lantus' || form.type === 'Étkezés') && form.insulinLong) ? parseFloat(form.insulinLong) : null,
+   insulinLong: ((form.type === 'Lantus') && form.insulinLong) ? parseFloat(form.insulinLong) : null,
    /* v12.3: beadási idő csak akkor tárolódik, ha van dózis ÉS eltér a bejegyzés időpontjától */
    insulinRapidTime: (!_noRapid && form.insulinRapid && form.insulinRapidTime && form.insulinRapidTime !== form.timestamp) ? form.insulinRapidTime : null,
-   insulinLongTime: ((form.type === 'Lantus' || form.type === 'Étkezés') && form.insulinLong && form.insulinLongTime && form.insulinLongTime !== form.timestamp) ? form.insulinLongTime : null,
+   insulinLongTime: ((form.type === 'Lantus') && form.insulinLong && form.insulinLongTime && form.insulinLongTime !== form.timestamp) ? form.insulinLongTime : null,
    /* v14: tevékenység-adatok Egyéb tevékenységnél ÉS Kontrollnál */
    activity: _hasAct ? (form.activity || '').trim() : '',
    activityDur: _hasAct ? (parseInt(form.activityDur) || 0) : 0,
@@ -6560,7 +6569,7 @@ function AddEntry({
        insulinRapidTime: v
       })
      })),
-    (form.type === 'Lantus' || form.type === 'Étkezés') && h('div', null, h('label', {
+    (form.type === 'Lantus') && h('div', null, h('label', {
       className: 'text-sm font-bold text-gray-500 block mb-1'
      }, '💉 ' + (((typeof settings !== 'undefined') && settings && settings.basalName) || 'Lantus') + ' (E)'),
      h('input', {
@@ -6824,7 +6833,7 @@ function EditModal({
  const _noRapid = form.type === 'Lantus' || _isAct;
  const _hasCH = form.type === 'Étkezés' || form.type === 'Kontroll';
  const showFoodEd = _hasCH || foodCH > 0;
- const showLong = form.type === 'Lantus' || form.type === 'Étkezés';
+ const showLong = form.type === 'Lantus'; /* v17: Étkezésnél nincs Lantus-mező */
  const submit = e => {
   e.preventDefault();
   const _mmol = form.bloodGlucose !== '' && form.bloodGlucose != null ? window.bgU.toMmol(form.bloodGlucose) : null;
@@ -8088,7 +8097,11 @@ const DEFAULT_SETTINGS = {
  sosContacts: [],
  sosNote: '',
  /* v14: fizikai aktivitás szintek (1–5) — a felhasználó által elnevezhető */
- actLevels: ['Nagyon könnyű', 'Könnyű', 'Közepes', 'Megerőltető', 'Nagyon megerőltető']
+ actLevels: ['Nagyon könnyű', 'Könnyű', 'Közepes', 'Megerőltető', 'Nagyon megerőltető'],
+ /* v17: bázisinzulin-emlékeztető — beadási időpont + mennyivel előtte jelenjen meg */
+ basalRemindOn: true,
+ basalRemindTime: '22:00',
+ basalRemindBefore: 60 /* perc */
 };
 
 /* v8: extrém vércukorérték-ellenőrzés (mmol/l-ben) — elgépelés-védelem */
@@ -8680,6 +8693,57 @@ function Settings({
       })),
       className: fi
      })
+    ),
+    /* ═══ v17: BÁZISINZULIN-EMLÉKEZTETŐ — időpont + előjelzés + kapcsoló ═══ */
+    h('div', null,
+     h('label', {
+      className: 'text-sm font-bold text-purple-700 block mb-1'
+     }, '⏰ ' + window.t('Bázis beadásának időpontja')),
+     h('input', {
+      type: 'time',
+      value: s.basalRemindTime || '22:00',
+      onChange: e => setS(p => ({
+       ...p,
+       basalRemindTime: e.target.value || '22:00'
+      })),
+      className: fi
+     })
+    ),
+    h('div', null,
+     h('label', {
+      className: 'text-sm font-bold text-purple-700 block mb-1'
+     }, window.t('Emlékeztető ennyivel előbb')),
+     h('select', {
+       value: String(s.basalRemindBefore != null ? s.basalRemindBefore : 60),
+       onChange: e => setS(p => ({
+        ...p,
+        basalRemindBefore: parseInt(e.target.value)
+       })),
+       className: fi
+      },
+      [0, 15, 30, 45, 60, 90, 120].map(m => h('option', {
+       key: m,
+       value: String(m)
+      }, m === 0 ? window.t('pontban a megadott időpontban') : m + ' ' + window.t('perccel előtte')))
+     )
+    ),
+    h('div', null,
+     h('label', {
+      className: 'text-sm font-bold text-purple-700 block mb-1'
+     }, window.t('Emlékeztető az Áttekintésen')),
+     h('label', {
+       className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
+      },
+      h('input', {
+       type: 'checkbox',
+       checked: s.basalRemindOn !== false,
+       onChange: e => setS(p => ({
+        ...p,
+        basalRemindOn: e.target.checked
+       }))
+      }),
+      s.basalRemindOn !== false ? window.t('Bekapcsolva') : window.t('Kikapcsolva')
+     )
     )
    ),
    h('div', null,

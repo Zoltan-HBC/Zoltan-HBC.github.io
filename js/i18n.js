@@ -316,6 +316,15 @@ window.HBC_I18N = (function() {
   'Közepes': 'Moderate',
   'Megerőltető': 'Strenuous',
   'Nagyon megerőltető': 'Very strenuous',
+  // ═══ v17: bázisinzulin-emlékeztető ═══
+  'Bázis beadásának időpontja': 'Basal injection time',
+  'Emlékeztető ennyivel előbb': 'Show reminder this much earlier',
+  'pontban a megadott időpontban': 'exactly at the set time',
+  'perccel előtte': 'minutes before',
+  'Emlékeztető az Áttekintésen': 'Reminder on the Overview',
+  'Bekapcsolva': 'Enabled',
+  'Kikapcsolva': 'Disabled',
+  'javasolt beadás': 'recommended injection',
   // ═══ v15: riport küldése e-mailben, orvos-címlista ═══
   'Riport küldése e-mailben az orvosnak': 'Send the report to your doctor by e-mail',
   'A riport a saját Gmail-fiókodból megy el hivatalos kísérőlevéllel, maga a riport pedig csatolt, nyomtatható PDF-fájlként érkezik meg az orvoshoz. Az első küldés előtt a Google egyszeri engedélyt kér.': 'The report is sent from your own Gmail account with a formal cover letter, and the report itself arrives as an attached, printable PDF file. Before the first send, Google asks for a one-time permission.',

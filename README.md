@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v14 Personal APP
+# HBC Diabétesz Napló v15 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).

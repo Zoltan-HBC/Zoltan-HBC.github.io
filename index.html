@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<title>HBC Diabétesz Napló v14 Type 1 Diabetes APP</title>
+<title>HBC Diabétesz Napló Type 1 Diabetes APP</title>
 <meta name="description" content="Inzulinnal kezelt cukorbetegek személyes naplója – vércukor, szénhidrát, inzulin, statisztika, megosztás.">
 <meta name="theme-color" content="#4f46e5">
 <link rel="manifest" href="manifest.json">
@@ -17,6 +17,24 @@
 <link rel="stylesheet" href="css/custom.css">
 </head>
 <body>
+<!-- ═══ v15: INDÍTÓKÉPERNYŐ — csak HIDEG indításkor (új munkamenet), 3 mp-ig.
+     Háttérből előhozáskor (futó munkamenet) nem jelenik meg. -->
+<style>
+#hbc-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(160deg,#eef2ff 0%,#e0e7ff 45%,#ddd6fe 100%);transition:opacity .4s ease}
+#hbc-splash img{width:110px;height:110px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(79,70,229,.35));animation:hbcPop .6s ease}
+#hbc-splash h1{margin:0;font-family:'Nunito','Segoe UI',sans-serif;font-size:24px;font-weight:900;color:#312e81;text-align:center}
+#hbc-splash .ver{font-family:'Nunito','Segoe UI',sans-serif;font-size:17px;font-weight:800;color:#4f46e5;background:rgba(79,70,229,.1);border:1.5px solid rgba(79,70,229,.3);border-radius:999px;padding:3px 16px}
+#hbc-splash .ld{font-family:'Nunito','Segoe UI',sans-serif;font-size:12.5px;font-weight:700;color:#6b7280;animation:hbcPulse 1.2s ease infinite}
+@keyframes hbcPop{0%{transform:scale(.7);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes hbcPulse{0%,100%{opacity:.45}50%{opacity:1}}
+@media (prefers-color-scheme:dark){#hbc-splash{background:linear-gradient(160deg,#1e1b4b 0%,#312e81 60%,#4c1d95 100%)}#hbc-splash h1{color:#e0e7ff}#hbc-splash .ver{color:#c7d2fe;background:rgba(199,210,254,.12);border-color:rgba(199,210,254,.35)}#hbc-splash .ld{color:#a5b4fc}}
+</style>
+<div id="hbc-splash">
+  <img src="icons/logo.png" alt="HBC">
+  <h1>HBC Diabétesz Napló</h1>
+  <div class="ver" id="hbc-splash-ver"></div>
+  <div class="ld">Adatok frissítése…</div>
+</div>
 <div id="root"></div>
 <script src="lib/react.production.min.js"></script>
 <script src="lib/react-dom.production.min.js"></script>
@@ -30,6 +48,28 @@
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
+/* ═══ v15: indítóképernyő vezérlése ═══
+   - A verziószám MINDIG az app.js központi APP_VERSION konstansából jön,
+     így soha nem ragadhat be régi szám (a rendszer-splash-sel ellentétben).
+   - sessionStorage: ugyanabban a (háttérben futó) munkamenetben nem jön fel újra. */
+(function(){
+  var sp=document.getElementById('hbc-splash');
+  if(!sp) return;
+  try{
+    var v=document.getElementById('hbc-splash-ver');
+    if(v && typeof APP_VERSION!=='undefined') v.textContent='v'+APP_VERSION;
+  }catch(e){}
+  var seen=false;
+  try{
+    seen=sessionStorage.getItem('hbc-splash-seen')==='1';
+    sessionStorage.setItem('hbc-splash-seen','1');
+  }catch(e){}
+  if(seen){ sp.parentNode.removeChild(sp); return; }
+  setTimeout(function(){
+    sp.style.opacity='0';
+    setTimeout(function(){ if(sp.parentNode) sp.parentNode.removeChild(sp); },450);
+  },3000);
+})();
 </script>
 </body>
 </html>

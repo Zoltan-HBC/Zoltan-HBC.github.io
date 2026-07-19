@@ -19,8 +19,10 @@ window.HBC_SYNC = (function() {
     kijelölt IDEGEN fájl hozzáférése a Google-belépés lejártával elveszett
     (404: „naplófájl nem található”), ezért a követőnek tartós, csak-olvasási
     jog kell. Írni ezzel sem tud. */
- const SCOPE_OWNER = 'https://www.googleapis.com/auth/drive.file';
- const SCOPE_FOLLOWER = 'https://www.googleapis.com/auth/drive.readonly';
+ /* v15: + gmail.send — az Orvosi riport közvetlen e-mail küldéséhez (a felhasználó
+    saját Gmail-fiókjából). A scope-bővítés miatt egyszeri újra-engedélyezés kell. */
+ const SCOPE_OWNER = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send';
+ const SCOPE_FOLLOWER = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/gmail.send';
  const SCOPE = () => (cfg.mode === 'follower' ? SCOPE_FOLLOWER : SCOPE_OWNER);
  const FILE_NAME = 'HBC_Diabetesz_Naplo.json';
  let tokenClient = null,
@@ -509,12 +511,35 @@ window.HBC_SYNC = (function() {
   }
  });
 
+ /* ═══ v15: RIPORT KÜLDÉSE E-MAILBEN (Gmail API) ═══
+    rawB64url: base64url-kódolt teljes MIME-üzenet (az app.js állítja össze). */
+ function sendEmail(rawB64url) {
+  return ensureToken(true).then(() =>
+   fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+     Authorization: 'Bearer ' + accessToken,
+     'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+     raw: rawB64url
+    })
+   }).then(r => {
+    if (!r.ok) return r.json().catch(() => ({})).then(j => {
+     throw new Error('gmail_' + r.status + ((j.error && j.error.message) ? ': ' + j.error.message : ''));
+    });
+    return r.json();
+   })
+  );
+ }
+
  loadCfg();
  return {
   cfg,
   on,
   saveCfg,
   ensureToken,
+  sendEmail,
   openPicker,
   push,
   pull,

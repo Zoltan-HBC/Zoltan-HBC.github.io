@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '14.2';
+const APP_VERSION = '15';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3844,9 +3844,9 @@ function Dashboard({
  onEdit,
  onDelete,
  settings,
- onAdd
+ onAdd,
+ onNoteSave /* v15: a Legutóbbi vércukor kártya megjegyzése a bejegyzésbe mentődik; követőnél null (csak olvasás) */
 }) {
- const [bgNote, setBgNote] = useState(localStorage.getItem('hbc-bgnote') || '');
  const [editingNote, setEditingNote] = useState(false);
  const [noteInput, setNoteInput] = useState('');
 
@@ -3869,9 +3869,12 @@ function Dashboard({
  const latestVal = latestBG ? parseFloat(latestBG.bloodGlucose) : null;
  const iob = useMemo(() => calcIOB(entries, settings && settings.diaHours), [entries, settings]);
 
+ /* v15: a megjegyzés NEM különálló localStorage-szöveg többé, hanem a legutóbbi
+    vércukor-bejegyzés "notes" mezője — így a Mai bejegyzéseknél is látszik/szerkeszthető,
+    szinkronizálódik, és a Követő is látja. */
+ const bgNote = (latestBG && latestBG.notes) || '';
  const saveNote = () => {
-  localStorage.setItem('hbc-bgnote', noteInput);
-  setBgNote(noteInput);
+  if (onNoteSave && latestBG) onNoteSave(latestBG, noteInput.trim());
   setEditingNote(false);
  };
 
@@ -4124,7 +4127,8 @@ function Dashboard({
        bgNote && h('p', {
         className: 'text-sm bg-white/20 rounded-xl px-3 py-1 flex-1'
        }, `💬 ${bgNote}`),
-       h('button', {
+       /* v15: követő módban (onNoteSave == null) nincs szerkesztő gomb — csak olvasható */
+       onNoteSave && h('button', {
         onClick: () => {
          setNoteInput(bgNote);
          setEditingNote(true);
@@ -4705,7 +4709,10 @@ function EntriesList({
 }
 
 // ═══════════ v8: ORVOSI RIPORT (nyomtatható / PDF) ═══════════
-function generateDoctorReport(entries, settings, f, t) {
+/* v15: mode==='email' → nem nyit ablakot, hanem visszaadja a riport HTML-jét
+   (cid: képhivatkozásokkal) + a grafikon-képeket az e-mail összeállításához. */
+function generateDoctorReport(entries, settings, f, t, mode) {
+ const email = mode === 'email';
  const lang = window.HBC_I18N.getLang();
  const hu = lang !== 'en';
  const R = (a, b) => hu ? a : b;
@@ -4872,8 +4879,21 @@ function generateDoctorReport(entries, settings, f, t) {
     <td class="notes">${esc(e.notes||'')}</td></tr>`).join('');
 
  const stat = (l, v) => `<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div></div>`;
+ /* v15: hivatalos levél-bevezető az e-mailes riporthoz */
+ const _pName = (settings && (settings.sosName || settings.nickname)) || '';
+ const _pPhone = (settings && settings.sosPhone) || '';
+ const _pMail = (window.HBC_SYNC && window.HBC_SYNC.cfg.accountEmail) || '';
+ const emailIntro = email ? `<div style="font-size:12.5px;line-height:1.6;margin-bottom:14px">
+${R('Tisztelt Doktornő / Doktor Úr!','Dear Doctor,')}<br><br>
+${R('Mellékelten küldöm a diabétesz naplóm orvosi riportját a következő időszakra','Please find attached the medical report of my diabetes diary for the period')}: <b>${fmtD(f)} – ${fmtD(t)}</b>.<br>
+${R('A riport a HBC Diabétesz Napló alkalmazással készült.','The report was generated with the HBC Diabetes Diary application.')}<br><br>
+<b>${R('Beteg neve','Patient name')}:</b> ${esc(_pName)}<br>
+${_pPhone?`<b>${R('Telefonszám','Phone number')}:</b> ${esc(_pPhone)}<br>`:''}
+${_pMail?`<b>${R('E-mail','E-mail')}:</b> ${esc(_pMail)}<br>`:''}<br>
+${R('Üdvözlettel','Kind regards')}:<br><b>${esc(_pName)}</b></div>
+<hr style="border:none;border-top:2px solid #4f46e5;margin:0 0 16px 0">` : '';
  const html = `<!DOCTYPE html><html lang="${hu?'hu':'en'}"><head><meta charset="UTF-8">
-<base href="${location.href}">
+${email?'':`<base href="${location.href}">`}
 <title>${R('HBC Orvosi riport','HBC Medical report')} ${f} – ${t}</title>
 <style>
 @page{size:A4;margin:14mm}
@@ -4902,8 +4922,8 @@ tr:nth-child(even) td{background:#fafbff}
 .noprint button{background:#4f46e5;color:#fff;border:0;border-radius:10px;padding:10px 18px;font-weight:800;font-size:13px;cursor:pointer}
 @media print{.noprint{display:none}}
 </style></head><body>
-<div class="noprint"><button onclick="window.print()">🖨️ ${R('Nyomtatás / PDF mentés','Print / Save as PDF')}</button></div>
-<div class="hdr"><img src="icons/logo.png" alt="">
+${emailIntro}${email?'':`<div class="noprint"><button onclick="window.print()">🖨️ ${R('Nyomtatás / PDF mentés','Print / Save as PDF')}</button></div>`}
+<div class="hdr"><img src="${email?'cid:hbclogo':'icons/logo.png'}" alt="">
   <div><h1>HBC ${R('Diabétesz Napló — Orvosi riport','Diabetes Diary — Medical report')}</h1>
   <div class="sub">${R('Inzulinnal kezelt cukorbeteg személyes naplója','Personal diary of an insulin-treated person with diabetes')} · v${APP_VERSION}</div></div></div>
 <div class="meta">
@@ -4930,16 +4950,25 @@ tr:nth-child(even) td{background:#fafbff}
   ${stat(R('CH napi átlag','Daily avg carbs'),(sumCH/dayCount).toFixed(0)+' g')}
   ${stat(R('Bejegyzések','Entries'),es.length)}
 </div>
-${bgImg?`<h2>${R('Vércukor-értékek a teljes időszakban','Blood glucose over the whole period')}</h2><img class="chart" src="${bgImg}">`:''}
-${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly average)')}</h2><img class="chart" src="${patImg}">`:''}
+${bgImg?`<h2>${R('Vércukor-értékek a teljes időszakban','Blood glucose over the whole period')}</h2><img class="chart" src="${email?'cid:hbcchart1':bgImg}">`:''}
+${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly average)')}</h2><img class="chart" src="${email?'cid:hbcchart2':patImg}">`:''}
 <h2>${R('Részletes napló','Detailed log')} (${es.length})</h2>
 <table><thead><tr><th>${R('Időpont','Time')}</th><th>${R('Típus','Type')}</th><th>${R('VC','BG')} (${UL})</th><th>CH (g)</th><th>${esc(rapidN)} (E)</th><th>${esc(basalN)} (E)</th><th>${R('Megjegyzés','Notes')}</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <p style="font-size:9.5px;color:#6b7280;margin:4px 0 0">${R('A zárójeles idő az inzulin tényleges beadási időpontja, ha az eltér a bejegyzés időpontjától.','Time in parentheses is the actual insulin injection time when it differs from the entry time.')}</p>
 <div class="warn">⚠️ ${R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!','This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!')}</div>
 <div class="foot"><span>${R('HBC Diabétesz Napló','HBC Diabetes Diary')} v${APP_VERSION} Type 1 Diabetes APP</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
-<script>setTimeout(function(){window.print();},400);</script>
+${email?'':'<scr'+'ipt>setTimeout(function(){window.print();},400);</scr'+'ipt>'}
 </body></html>`;
+ /* v15: e-mail mód — a hívó állítja össze a MIME-üzenetet */
+ if (email) return {
+  html,
+  bgImg,
+  patImg,
+  pName: _pName,
+  fmtF: fmtD(f),
+  fmtT: fmtD(t)
+ };
  const win = window.open('', '_blank');
  if (!win) return false;
  win.document.open();
@@ -4948,10 +4977,76 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
  return true;
 }
 
+/* ═══════════ v15: ORVOSI RIPORT KÜLDÉSE E-MAILBEN (Gmail API) ═══════════
+   A riport a levél törzsében jelenik meg (a grafikonok/logó beágyazott inline
+   képek), ÉS csatolmányként is megy egy önálló, archiválható HTML-fájl. */
+function _b64EncodeUtf8(str) {
+ const bytes = new TextEncoder().encode(str);
+ let bin = '';
+ for (let i = 0; i < bytes.length; i += 0x8000)
+  bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+ return btoa(bin);
+}
+function _mimeWrap(b64) { /* 76 karakteres sorok (RFC 2045) */
+ return b64.replace(/(.{76})/g, '$1\r\n');
+}
+function _encHeaderWord(s) { /* nem-ASCII fejléc-szöveg (Tárgy, név) RFC 2047 */
+ return /^[\x20-\x7e]*$/.test(s) ? s : '=?UTF-8?B?' + _b64EncodeUtf8(s) + '?=';
+}
+async function sendDoctorReportEmail(entries, settings, f, t, toAddr) {
+ const hu = window.HBC_I18N.getLang() !== 'en';
+ const rep = generateDoctorReport(entries, settings, f, t, 'email');
+ /* logó beolvasása base64-ként (ha nem érhető el, a riport logó nélkül megy) */
+ let logoB64 = '';
+ try {
+  logoB64 = await fetch('icons/logo.png').then(r => r.ok ? r.blob() : Promise.reject())
+   .then(b => new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result).split(',')[1]);
+    fr.onerror = rej;
+    fr.readAsDataURL(b);
+   })).catch(() => '');
+ } catch (e) {}
+ const fromMail = (window.HBC_SYNC && window.HBC_SYNC.cfg.accountEmail) || '';
+ const subject = (rep.pName ? rep.pName + ' ' : '') +
+  (hu ? 'diabétesz riportja' : 'diabetes report') + ' – ' + rep.fmtF + ' – ' + rep.fmtT;
+ /* csatolmány: önálló HTML — a cid: hivatkozások beágyazott data: képekre cserélve */
+ const attHtml = rep.html
+  .replace(/cid:hbclogo/g, logoB64 ? 'data:image/png;base64,' + logoB64 : '')
+  .replace(/cid:hbcchart1/g, rep.bgImg || '')
+  .replace(/cid:hbcchart2/g, rep.patImg || '');
+ const attName = `HBC_riport_${f}_${t}.html`;
+ const MIX = 'hbcmix' + Date.now(), REL = 'hbcrel' + Date.now();
+ const inlineImg = (cid, b64) => !b64 ? '' :
+  `--${REL}\r\nContent-Type: image/png\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <${cid}>\r\nContent-Disposition: inline\r\n\r\n${_mimeWrap(b64)}\r\n`;
+ const stripData = d => (d && d.indexOf(',') > -1) ? d.slice(d.indexOf(',') + 1) : '';
+ const mime =
+  (fromMail ? `From: ${_encHeaderWord(rep.pName || 'HBC Diabétesz Napló')} <${fromMail}>\r\n` : '') +
+  `To: ${toAddr}\r\n` +
+  `Subject: ${_encHeaderWord(subject)}\r\n` +
+  `MIME-Version: 1.0\r\n` +
+  `Content-Type: multipart/mixed; boundary="${MIX}"\r\n\r\n` +
+  `--${MIX}\r\nContent-Type: multipart/related; boundary="${REL}"\r\n\r\n` +
+  `--${REL}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n` +
+  `${_mimeWrap(_b64EncodeUtf8(rep.html))}\r\n` +
+  inlineImg('hbclogo', logoB64) +
+  inlineImg('hbcchart1', stripData(rep.bgImg)) +
+  inlineImg('hbcchart2', stripData(rep.patImg)) +
+  `--${REL}--\r\n` +
+  `--${MIX}\r\nContent-Type: text/html; charset=UTF-8; name="${attName}"\r\n` +
+  `Content-Disposition: attachment; filename="${attName}"\r\nContent-Transfer-Encoding: base64\r\n\r\n` +
+  `${_mimeWrap(_b64EncodeUtf8(attHtml))}\r\n` +
+  `--${MIX}--`;
+ const raw = _b64EncodeUtf8(mime).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+ return window.HBC_SYNC.sendEmail(raw);
+}
+
 // ═══════════ STATISZTIKA + IOB ═══════════
 function Statistics({
  entries,
- settings
+ settings,
+ docEmails,
+ onSaveDocEmails
 }) {
  const [mode, setMode] = useState('7');
  const [fromD, setFromD] = useState(subD(7));
@@ -4962,6 +5057,34 @@ function Statistics({
  /* v8: orvosi riport időszaka — naptári "-tól -ig" */
  const [repF, setRepF] = useState(subD(14));
  const [repT, setRepT] = useState(todayStr());
+ /* v15: riport küldése e-mailben — panel, orvos-címlista */
+ const [repPanel, setRepPanel] = useState(false);
+ const [docMail, setDocMail] = useState('');
+ const [sending, setSending] = useState(false);
+ const [sendMsg, setSendMsg] = useState(null); /* {ok, text} */
+ const [editList, setEditList] = useState(false);
+ const _emails = Array.isArray(docEmails) ? docEmails : [];
+ const validMail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(docMail.trim());
+ const doSend = () => {
+  const addr = docMail.trim();
+  if (!validMail || sending) return;
+  setSending(true);
+  setSendMsg(null);
+  sendDoctorReportEmail(entries, settings, repF, repT, addr).then(() => {
+   setSending(false);
+   setSendMsg({
+    ok: true,
+    text: window.t('A riport elküldve') + ': ' + addr
+   });
+   if (onSaveDocEmails && !_emails.includes(addr)) onSaveDocEmails([..._emails, addr]);
+  }).catch(err => {
+   setSending(false);
+   setSendMsg({
+    ok: false,
+    text: window.t('A küldés nem sikerült') + ' (' + (err && err.message || 'hiba') + '). ' + window.t('Ellenőrizd az internetkapcsolatot és a Google-engedélyt, majd próbáld újra.')
+   });
+  });
+ };
 
  const {
   f,
@@ -5326,7 +5449,9 @@ function Statistics({
       type: 'button',
       onClick: () => {
        if (repF > repT) return;
-       generateDoctorReport(entries, settings, repF, repT);
+       /* v15: a gomb a küldő/nyomtató panelt nyitja meg */
+       setSendMsg(null);
+       setRepPanel(p => !p);
       },
       className: 'font-bold text-white px-5 py-2.5 rounded-xl text-sm shadow-lg inline-flex items-center gap-2 min-h-[44px]',
       style: {
@@ -5340,7 +5465,93 @@ function Statistics({
    ),
    repF > repT && h('p', {
     className: 'text-xs text-red-500 font-bold mt-2'
-   }, 'A kezdő dátum nem lehet később, mint a záró dátum!')
+   }, 'A kezdő dátum nem lehet később, mint a záró dátum!'),
+
+   /* ═══ v15: RIPORT KÜLDÉSE E-MAILBEN — panel mentett orvos-címlistával ═══ */
+   repPanel && h('div', {
+     className: 'mt-3 p-3 bg-indigo-50 rounded-xl border border-indigo-200'
+    },
+    h('p', {
+     className: 'text-sm font-bold text-indigo-800 mb-2'
+    }, '📧 ' + window.t('Riport küldése e-mailben az orvosnak')),
+    h('p', {
+     className: 'text-xs text-indigo-700 mb-2'
+    }, window.t('A riport a saját Gmail-fiókodból megy el: a levélben azonnal látható, és csatolt fájlként is megérkezik. Az első küldés előtt a Google egyszeri engedélyt kér.')),
+    h('input', {
+     type: 'email',
+     value: docMail,
+     onChange: e => setDocMail(e.target.value),
+     placeholder: window.t('Az orvos e-mail címe') + '…',
+     className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 mb-2',
+     onKeyDown: e => e.key === 'Enter' && doSend()
+    }),
+    /* mentett címek — kiválasztás egy érintéssel; szerkesztő módban törlés */
+    _emails.length > 0 && h('div', {
+      className: 'mb-2'
+     },
+     h('div', {
+       className: 'flex items-center justify-between mb-1'
+      },
+      h('p', {
+       className: 'text-xs font-bold text-gray-500'
+      }, window.t('Mentett címek') + ` (${_emails.length}):`),
+      onSaveDocEmails && h('button', {
+       type: 'button',
+       onClick: () => setEditList(v => !v),
+       className: 'text-xs font-bold text-indigo-600 hover:text-indigo-800'
+      }, editList ? '✅ ' + window.t('Kész') : '✏️ ' + window.t('Szerkesztés'))
+     ),
+     h('div', {
+       className: 'flex flex-wrap gap-2'
+      },
+      _emails.map(em => h('span', {
+        key: em,
+        className: 'inline-flex items-center gap-1 bg-white border border-indigo-200 rounded-xl px-2 py-1 text-xs font-bold text-indigo-800'
+       },
+       h('button', {
+        type: 'button',
+        onClick: () => setDocMail(em),
+        className: 'hover:text-indigo-500',
+        title: window.t('Cím kiválasztása')
+       }, em),
+       editList && h('button', {
+        type: 'button',
+        onClick: () => onSaveDocEmails(_emails.filter(x => x !== em)),
+        className: 'text-red-500 hover:text-red-700 font-black',
+        title: window.t('Törlés'),
+        'aria-label': window.t('Törlés')
+       }, '✕')
+      ))
+     ),
+     editList && h('p', {
+      className: 'text-xs text-gray-400 mt-1'
+     }, window.t('Módosításhoz: érintsd meg a címet, javítsd a mezőben, majd küldéskor újként mentődik.'))
+    ),
+    h('div', {
+      className: 'flex gap-2 flex-wrap'
+     },
+     h('button', {
+       type: 'button',
+       disabled: !validMail || sending,
+       onClick: doSend,
+       className: 'font-bold text-white px-5 py-2.5 rounded-xl text-sm shadow-lg inline-flex items-center gap-2 min-h-[44px]' + ((!validMail || sending) ? ' opacity-50' : ''),
+       style: {
+        background: 'linear-gradient(135deg,#059669,#10b981)'
+       }
+      }, sending ? '⏳ ' + window.t('Küldés folyamatban') + '…' : '📧 ' + window.t('Küldés e-mailben')),
+     h('button', {
+       type: 'button',
+       onClick: () => generateDoctorReport(entries, settings, repF, repT),
+       className: 'font-bold px-5 py-2.5 rounded-xl text-sm border-2 border-indigo-300 text-indigo-700 inline-flex items-center gap-2 min-h-[44px] bg-white'
+      }, '🖨️ ' + window.t('PDF / Nyomtatás'))
+    ),
+    sendMsg && h('p', {
+     className: 'text-xs font-bold mt-2',
+     style: {
+      color: sendMsg.ok ? '#059669' : '#dc2626'
+     }
+    }, (sendMsg.ok ? '✅ ' : '⚠️ ') + sendMsg.text)
+   )
   ])
  );
 }
@@ -7589,7 +7800,10 @@ function SOSPage({
       cursor: 'pointer'
      }
     },
-    autoAlert ? '✅ ' + R('JÓL VAGYOK — riasztás bezárása', 'I AM OK — dismiss alert') : '✖ ' + R('Bezárás', 'Close'))
+    /* v15: követő módban a gombfelirat "Rendben" — a követő nem a saját állapotát nyugtázza */
+    autoAlert ? '✅ ' + ((window.HBC_SYNC && window.HBC_SYNC.cfg.mode === 'follower') ?
+     R('Rendben — riasztás bezárása', 'OK — dismiss alert') :
+     R('JÓL VAGYOK — riasztás bezárása', 'I AM OK — dismiss alert')) : '✖ ' + R('Bezárás', 'Close'))
   )
  );
 }
@@ -8595,6 +8809,34 @@ function App() {
   }
  });
 
+ /* v15: egyszeri migráció — a régi, különálló "hbc-bgnote" megjegyzés átkerül a
+    legutóbbi vércukor-bejegyzés notes mezőjébe (így látszik a Mai bejegyzéseknél,
+    szerkeszthető ott, szinkronizálódik, és a Követő is látja). Követőnél a helyi
+    jegyzet érvénytelen volt: csak törlődik. */
+ const migrateBgNote = arr => {
+  const old = localStorage.getItem('hbc-bgnote');
+  if (old === null) return arr;
+  localStorage.removeItem('hbc-bgnote');
+  const fol = window.HBC_SYNC && window.HBC_SYNC.cfg.mode === 'follower';
+  if (fol || !old) return arr;
+  let idx = -1, best = '';
+  arr.forEach((e, i) => {
+   if (e && e.bloodGlucose && e.timestamp > best) {
+    best = e.timestamp;
+    idx = i;
+   }
+  });
+  if (idx === -1 || arr[idx].notes) return arr;
+  const out = arr.slice();
+  out[idx] = {
+   ...out[idx],
+   notes: old,
+   _mod: Date.now()
+  };
+  localStorage.setItem('hbc-v5-entries', JSON.stringify(out));
+  return out;
+ };
+
  useEffect(() => {
   const loadAll = () => {
    const se = localStorage.getItem('hbc-v5-entries');
@@ -8602,7 +8844,7 @@ function App() {
    const ss = localStorage.getItem('hbc-v5-settings');
    if (se) {
     try {
-     setEntries(JSON.parse(se));
+     setEntries(migrateBgNote(JSON.parse(se)));
     } catch (e) {}
    }
    if (sf) {
@@ -8737,6 +8979,19 @@ function App() {
   localStorage.setItem('hbc-v5-settings', JSON.stringify(s));
   drivePush(entries, allFoods, s);
   showAlert('✅ Beállítások mentve!');
+ };
+ /* v15: orvos-e-mail címlista csendes mentése (felugró üzenet nélkül) —
+    a SAJÁT settings-be kerül: tulajdonosnál szinkronizálódik az eszközei
+    között, követőnél a készülék saját listája. */
+ const saveDocEmails = list => {
+  const s = {
+   ...settings,
+   doctorEmails: list,
+   _mod: Date.now()
+  };
+  setSettings(s);
+  localStorage.setItem('hbc-v5-settings', JSON.stringify(s));
+  drivePush(entries, allFoods, s);
  };
 
  const addEntry = e => {
@@ -9148,7 +9403,13 @@ function App() {
     onEdit: followerMode ? setViewingEntry : setEditingEntry,
     onDelete: followerMode ? () => {} : deleteEntry,
     settings: effSettings,
-    onAdd: followerMode ? null : () => setView('add')
+    onAdd: followerMode ? null : () => setView('add'),
+    /* v15: a Legutóbbi vércukor kártya megjegyzése a bejegyzés notes mezőjébe mentődik;
+       követőnél null → csak olvasható */
+    onNoteSave: followerMode ? null : (entry, txt) => updateEntry({
+     ...entry,
+     notes: txt
+    })
    }),
    view === 'charts' && h(Charts, {
     entries: effEntries,
@@ -9172,7 +9433,10 @@ function App() {
    }),
    view === 'stats' && h(Statistics, {
     entries: effEntries,
-    settings: effSettings
+    settings: effSettings,
+    /* v15: az orvos-címlista mindig a SAJÁT (helyi) settings-ből jön */
+    docEmails: (settings && settings.doctorEmails) || [],
+    onSaveDocEmails: saveDocEmails
    }),
    view === 'foods' && h(FoodManager, {
     allFoods,

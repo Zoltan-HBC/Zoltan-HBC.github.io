@@ -498,6 +498,47 @@ window.HBC_SYNC = (function() {
     });
     lastAlertTs = newest.timestamp;
    }
+   /* ═══ v18 (6.5): ELŐREJELZETT ALACSONY ÉRTÉK — trend-alapú korai riasztás ═══
+      A megosztott CGM-adatok utolsó ~30 percére egyenest illesztünk, és 20 perccel
+      előre vetítjük. Ha a jelenlegi érték még a határ FELETT van, de a vetített érték
+      alá esne, korai riasztás megy a követőnek. A Tulajdonos Beállításaiban
+      kapcsolható (featPredLow, alapból BE); 30 percenként legfeljebb egyszer szól. */
+   try {
+    if (al.lowOn && (a.featPredLow !== false)) {
+     const cutoff = Date.now() - 35 * 60000;
+     const recent = (data.cgm || [])
+      .filter(r => r && r.v && new Date(r.ts).getTime() >= cutoff)
+      .map(r => ({ x: new Date(r.ts).getTime() / 60000, y: parseFloat(r.v) }))
+      .filter(p => !isNaN(p.y))
+      .sort((p, q) => p.x - q.x);
+     if (recent.length >= 3) {
+      const lastP = recent[recent.length - 1];
+      /* a legutolsó mérés legyen friss (15 percen belüli) */
+      if (Date.now() / 60000 - lastP.x <= 15 && lastP.y >= low) {
+       const n = recent.length;
+       const sx = recent.reduce((s, p) => s + p.x, 0),
+        sy = recent.reduce((s, p) => s + p.y, 0),
+        sxx = recent.reduce((s, p) => s + p.x * p.x, 0),
+        sxy = recent.reduce((s, p) => s + p.x * p.y, 0);
+       const den = n * sxx - sx * sx;
+       const slope = den !== 0 ? (n * sxy - sx * sy) / den : 0; /* mmol/l per perc */
+       const predicted = lastP.y + slope * 20; /* 20 perccel előre */
+       if (slope < 0 && predicted < low) {
+        const lastPred = parseInt(localStorage.getItem('hbc-predlow-last') || '0');
+        if (Date.now() - lastPred > 30 * 60000) {
+         new Notification('HBC Napló – ' + window.t('Előrejelzett alacsony érték!'), {
+          body: '📉 ' + window.t('A vércukor süllyed') + ': ' + u.disp(lastP.y) + ' ' + u.label() +
+           ' → ~' + u.disp(Math.max(predicted, 2)) + ' ' + u.label() + ' (' + window.t('kb. 20 perc múlva') + ')',
+          icon: 'icons/icon-192.png',
+          tag: 'hbc-predlow'
+         });
+         localStorage.setItem('hbc-predlow-last', String(Date.now()));
+        }
+       }
+      }
+     }
+    }
+   } catch (e) {}
   } catch (e) {}
  }
 

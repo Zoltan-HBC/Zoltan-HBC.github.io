@@ -213,3 +213,19 @@ input[type=range]{padding:0;border:none;background:transparent}
    (a világos szöveget a általános sötét szabályok adják). A kis
    „Tevékenység" címke (hbc-badge) a v12.3-as fix szerint világos marad. */
 [data-hbc-dark] .bg-yellow-50{background-color:#332e14!important}
+
+/* ═══════════ v18 — NAGY BETŰS MÓD (6.7) ═══════════
+   A html.hbc-bigfont osztályt az App kapcsolja a Beállítások szerint.
+   A rem-alapú méretek automatikusan követik a gyökér betűméretet. */
+html.hbc-bigfont{font-size:115%}
+html.hbc-bigfont .text-xs{font-size:.85rem}
+html.hbc-bigfont .text-\[10px\],html.hbc-bigfont .text-\[11px\]{font-size:.75rem}
+
+/* v18 — sötét módban az új emeraldzöld kártyák/tételek is sötétre váltanak */
+[data-hbc-dark] .bg-emerald-50\/50{background-color:rgba(22,43,36,.5)!important}
+[data-hbc-dark] .bg-indigo-50\/50{background-color:rgba(36,31,61,.5)!important}
+[data-hbc-dark] .bg-teal-50{background-color:#132e2b!important}
+[data-hbc-dark] .text-teal-800{color:#94e0d3!important}
+[data-hbc-dark] .border-teal-200{border-color:#1f4a44!important}
+[data-hbc-dark] .border-emerald-200{border-color:#1f4a3a!important}
+[data-hbc-dark] .border-emerald-100{border-color:#1a3d31!important}

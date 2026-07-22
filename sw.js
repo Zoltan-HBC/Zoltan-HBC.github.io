@@ -1,4 +1,4 @@
-/* HBC Diabétesz Napló v17 — Service Worker
+/* HBC Diabétesz Napló v18 — Service Worker
    v10.1 JAVÍTÁS: a korábbi sw.js csonkolt volt (szintaktikai hiba), ezért a
    böngésző sosem tudta lecserélni a régi (v8) workert — a régi verzió ragadt be.
    Új stratégia:
@@ -6,7 +6,7 @@
      verzió töltődik, offline a cache-ből. Új verziónál nincs több "beragadás".
    - Fontok/ikonok (nem változnak): CACHE-FIRST a gyorsaságért.
    - Google/Drive kérések: érintetlenül átmennek a hálózatra. */
-const CACHE = 'hbc-v17';
+const CACHE = 'hbc-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -23,6 +23,8 @@ const ASSETS = [
   './js/storage.js',
   './js/sync.js',
   './js/cgm.js',
+  './js/chtabla.js',
+  './js/bt.js',
   './js/app.js',
   './icons/logo.png',
   './icons/TypeOneDiab_logo.png',

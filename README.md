@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v17 Personal APP
+# HBC Diabétesz Napló v18 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).
@@ -7,6 +7,32 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 1. **TELEPITESI_UTMUTATO.md** — közzététel (GitHub Pages, ingyenes) + telepítés minden eszközre
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
+
+## Mit tud a v17-hez képest? (v18 újdonságok — 2026. július)
+
+- **📚 Beépített magyar CH-táblázat:** több száz magyar étel (pékáru, köretek, levesek,
+  főételek, gyümölcsök, tejtermékek, édességek, italok) tipikus adaggal és CH-értékkel —
+  offline, az Ételek gyorsválasztó keresőjébe építve (js/chtabla.js)
+- **📈 AGP nézet:** nemzetközi szabvány szerinti percentilis grafikon a Statisztika
+  oldalon — óránkénti medián + a mérések középső 50%-át és 90%-át mutató sávok,
+  ujjbegyes és CGM-adatok együtt
+- **🥓 Zsíros/fehérjedús étel jelölés:** kapcsoló az étkezés bejegyzésben + figyelmeztetés
+  az elnyújtott vércukor-emelkedésre és a 2–3 órával későbbi ellenőrző mérésre
+- **📶 Bluetooth vércukormérő kapcsolat:** az utolsó mérés átvétele szabványos Bluetooth
+  mérőből (Accu-Chek, Dcont okosmérők) — Android + Chrome; iPhone-on nem támogatott (js/bt.js)
+- **📉 Előrejelzett alacsony érték riasztás:** a követő a CGM-trend alapján már azelőtt
+  riasztást kap, hogy az érték a határ alá esne
+- **⏰ Étkezés utáni mérési emlékeztető:** beállítható idővel (alap: 100 perc) jelez az
+  Áttekintésen, hogy ideje ellenőrző mérést végezni
+- **🔍 Keresés a naplóban:** szabad szavas keresés a Bejegyzések oldalon (pl. „pizza") —
+  a teljes naplóban
+- **🔠 Nagy betűs mód** és **📬 heti összefoglaló a követőnek**
+- **💬 Szerkeszthető motivációs üzenetek** (Beállítások) + állítható megjelenítési idő (1–10 mp)
+- **🔥 Szerkeszthető Sorozat-feliratok** pozitív/ezoterikus alapszövegekkel
+- **Javítások:** tevékenység-időtartam csúszka feliratai (0–4 óra), CH értékek egységesen
+  egy tizedessel (pl. 7.0), IOB idő-csík az Áttekintésen is
+- Minden új szolgáltatás a **Beállítások → 🧩 Új szolgáltatások (v18)** kártyán külön
+  ki-be kapcsolható — alapból bekapcsolva
 
 ## Mit tud a v11.1-hez képest? (v12.0 újdonságok)
 
@@ -78,8 +104,10 @@ sw.js               — service worker (offline működés)
 css/                — stílusok (Tailwind + egyéni)
 js/i18n.js          — kétnyelvűség + mértékegység-kezelés
 js/storage.js       — IndexedDB tartalék-mentés
-js/sync.js          — Google Drive szinkron + riasztások
+js/sync.js          — Google Drive szinkron + riasztások (v18: előrejelzett alacsony)
 js/cgm.js           — CGM CSV-import (LibreView/Dexcom)
+js/chtabla.js       — v18: beépített magyar szénhidráttáblázat
+js/bt.js            — v18: Bluetooth vércukormérő kapcsolat (Web Bluetooth)
 js/app.js           — maga az alkalmazás (React)
 lib/                — React + Chart.js (helyben, CDN nélkül)
 fonts/              — Nunito betűtípus (offline)

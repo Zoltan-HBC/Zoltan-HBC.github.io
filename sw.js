@@ -6,7 +6,7 @@
      verzió töltődik, offline a cache-ből. Új verziónál nincs több "beragadás".
    - Fontok/ikonok (nem változnak): CACHE-FIRST a gyorsaságért.
    - Google/Drive kérések: érintetlenül átmennek a hálózatra. */
-const CACHE = 'hbc-v18.4';
+const CACHE = 'hbc-v18.5';
 const ASSETS = [
   './',
   './index.html',

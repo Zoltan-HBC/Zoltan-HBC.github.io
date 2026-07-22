@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.4';
+const APP_VERSION = '18.5';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -10139,6 +10139,22 @@ function App() {
    cgm: (window.HBC_CGM ? window.HBC_CGM.getRange(subD(1), todayStr()) : [])
   });
  };
+
+ /* ═══ v18.5: SÖTÉT/VILÁGOS AZONNALI VÁLTÁS A LOGÓRA KOPPINTVA ═══
+    Jóváhagyás és felugró üzenet nélkül vált, a beállítás azonnal mentődik.
+    Ha a Megjelenés "Automatikus" volt, a váltás a jelenlegi nézet ellentétére
+    kapcsol (és onnantól kézi beállításként él tovább). */
+ const toggleDark = () => {
+  const isDark = document.documentElement.hasAttribute('data-hbc-dark');
+  const s = {
+   ...settings,
+   darkMode: isDark ? 'light' : 'dark',
+   _mod: Date.now()
+  };
+  setSettings(s);
+  localStorage.setItem('hbc-v5-settings', JSON.stringify(s));
+  drivePush(entries, allFoods, s);
+ };
  const saveEntries = useCallback(arr => {
   setEntries(arr);
   localStorage.setItem('hbc-v5-entries', JSON.stringify(arr));
@@ -10418,10 +10434,18 @@ function App() {
     h('div', {
       className: 'flex items-center gap-2 md:gap-3 min-w-0'
      },
+     /* v18.5: a logóra koppintva azonnali sötét/világos váltás — jóváhagyás nélkül */
      h('img', {
       src: 'icons/TypeOneDiab_logo.png',
       alt: 'TypeOneDiab logo',
-      className: 'hbc-logo'
+      className: 'hbc-logo cursor-pointer',
+      title: window.t('Sötét/világos nézet váltása'),
+      role: 'button',
+      tabIndex: 0,
+      onClick: toggleDark,
+      onKeyDown: e => {
+       if (e.key === 'Enter' || e.key === ' ') toggleDark();
+      }
      }),
      h('div', {
        className: 'min-w-0'

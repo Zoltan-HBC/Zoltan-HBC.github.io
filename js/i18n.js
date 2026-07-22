@@ -46,6 +46,8 @@ window.HBC_I18N = (function() {
   'Magyar CH-táblázat (beépített)': 'Hungarian carb table (built-in)',
   'találat': 'hits',
   'Válassz fent kategóriát, vagy írj be legalább 2 betűt a keresőbe (pl. „kenyér", „alma", „rizs") — a beépített táblázat tételei itt jelennek meg.': 'Choose a category above, or type at least 2 letters into the search box (e.g. "bread", "apple", "rice") — items of the built-in table appear here.',
+  /* v18.5: logó = sötét/világos váltó */
+  'Sötét/világos nézet váltása': 'Toggle dark/light view',
   /* v18.4: tételenkénti CH-időpontok */
   'Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)': 'The time this item was eaten (defaults to the entry time)',
   'Az óra mezővel tételenként megadhatod, MIKOR fogyasztottad el az adott ételt — alapból a bejegyzés időpontja érvényes. A módosított időpontú tétel zöld kerettel jelenik meg, és a grafikonon meg az étkezés utáni emlékeztetőben a saját idejével számít.': 'With the clock field you can set per item WHEN you ate that food — by default the entry time applies. An item with a modified time gets a green frame, and counts with its own time on the chart and in the post-meal reminder.',

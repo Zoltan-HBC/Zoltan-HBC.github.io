@@ -8,6 +8,12 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.5 bővítés (2026. július 22.)
+
+- **🌓 Logó = sötét/világos váltó:** a bal felső TypeOneDiab logóra koppintva
+  azonnali oda-vissza váltás a sötét és a világos nézet között — jóváhagyás
+  nélkül, asztali és mobil nézetben egyaránt; a választás azonnal mentődik
+
 ## v18.4 bővítés (2026. július 22.)
 
 - **⏱️ Tételenkénti CH-időpontok:** az étkezés minden ételéhez külön elfogyasztási

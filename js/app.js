@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.3';
+const APP_VERSION = '18.4';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3454,6 +3454,43 @@ function Icon({
    időpontját minden inzulinhoz kötött számításban (IOB, statisztika, grafikon, riport) */
 const rapidTS = e => (e && e.insulinRapidTime) || (e && e.timestamp) || '';
 const basalTS = e => (e && e.insulinLongTime) || (e && e.timestamp) || '';
+
+/* ═══ v18.4: TÉTELENKÉNTI CH-IDŐPONTOK ═══
+   Az étkezés minden étele külön időpontot (itemTime, "ÓÓ:PP") kaphat — alapból a
+   bejegyzés időpontja érvényes. Az elnyújtott étkezés (pl. 12:45-ös ebéd + 16:10-es
+   cappuccino) így a valós idejével jelenik meg a grafikonon és az emlékeztetőben. */
+const itemTS = (e, f) => (f && f.itemTime) ?
+ (String(e.timestamp).slice(0, 10) + 'T' + f.itemTime) : ((e && e.timestamp) || '');
+
+/* Egy bejegyzés CH-eseményekre bontva: az időzített ételek a saját időpontjuknál,
+   a maradék (extra CH + időzítetlen ételek) a bejegyzés időpontjánál. */
+function carbEvents(e) {
+ const total = parseFloat(e.carbs) || 0;
+ if (total <= 0) return [];
+ const timed = (e.foods || []).filter(f => f && f.itemTime);
+ if (!timed.length) return [{
+  ts: e.timestamp,
+  carbs: total
+ }];
+ const groups = {};
+ let timedSum = 0;
+ timed.forEach(f => {
+  const c = (parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1);
+  timedSum += c;
+  const ts = itemTS(e, f);
+  groups[ts] = (groups[ts] || 0) + c;
+ });
+ const out = Object.keys(groups).map(ts => ({
+  ts,
+  carbs: groups[ts]
+ }));
+ const rest = total - timedSum;
+ if (rest > 0.05) out.push({
+  ts: e.timestamp,
+  carbs: rest
+ });
+ return out.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+}
 
 function calcIOB(entries, diaHours) {
  const now = Date.now();
@@ -3926,7 +3963,10 @@ function Dashboard({
   const meals = todayEs.filter(e => e.type === 'Étkezés' && parseFloat(e.carbs) > 0);
   if (!meals.length) return null;
   const lastMeal = meals[meals.length - 1];
-  const mt = new Date(lastMeal.timestamp).getTime();
+  /* v18.4: az emlékeztető az UTOLSÓ CH-esemény idejétől számol — ha az étkezés
+     tételenkénti időpontokkal elnyújtott (pl. 16:10-es cappuccino), attól */
+  const _evs = carbEvents(lastMeal);
+  const mt = new Date(_evs.length ? _evs[_evs.length - 1].ts : lastMeal.timestamp).getTime();
   const elapsed = (Date.now() - mt) / 60000;
   if (elapsed < mins || elapsed > mins + 120) return null; /* csak az ablakban jelez, nem nyaggat örökké */
   const measured = todayEs.some(e => e.bloodGlucose && new Date(e.timestamp).getTime() > mt + 30 * 60000);
@@ -4464,13 +4504,16 @@ function Charts({
   }
   if (carbR.current) {
    charts.current.carb?.destroy();
+   /* v18.4: tételenkénti CH-időpontok — az időzített ételek a SAJÁT idejüknél
+      jelennek meg (pl. a 16:10-es cappuccino külön oszlopként) */
+   const carbEv = carbD.flatMap(e => carbEvents(e));
    charts.current.carb = new Chart(carbR.current.getContext('2d'), {
     type: 'bar',
     data: {
-     labels: carbD.map(e => fmtDT(e.timestamp)),
+     labels: carbEv.map(v => fmtDT(v.ts)),
      datasets: [{
       label: window.t('CH (g)'),
-      data: carbD.map(e => e.carbs),
+      data: carbEv.map(v => Math.round(v.carbs * 10) / 10),
       backgroundColor: 'rgba(16,185,129,.7)',
       borderColor: '#10b981',
       borderWidth: 0,
@@ -6591,6 +6634,14 @@ function AddEntry({
    mult
   } : f)
  }));
+ /* v18.4: tételenkénti CH-időpont ("ÓÓ:PP"); ha a bejegyzés idejével azonos, töröljük */
+ const setItemTime = (fid, tm) => setForm(p => ({
+  ...p,
+  foods: p.foods.map(f => f.fid === fid ? {
+   ...f,
+   itemTime: (tm && tm !== String(p.timestamp || '').slice(11, 16)) ? tm : null
+  } : f)
+ }));
  const foodCH = form.foods.reduce((s, f) => s + f.carbs * f.mult, 0);
  const extraCH = parseFloat(form.carbs) || 0;
  const totalCH = foodCH + extraCH;
@@ -6938,6 +6989,14 @@ function AddEntry({
       h('div', {
         className: 'flex items-center gap-1'
        },
+       /* v18.4: tételenkénti CH-időpont — alapból a bejegyzés ideje, szabadon finomítható */
+       h('input', {
+        type: 'time',
+        value: f.itemTime || String(form.timestamp || '').slice(11, 16),
+        onChange: e => setItemTime(f.fid, e.target.value),
+        title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
+        className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
+       }),
        h('select', {
          value: f.mult,
          onChange: e => setMult(f.fid, parseInt(e.target.value)),
@@ -6957,7 +7016,10 @@ function AddEntry({
      )),
      h('p', {
       className: 'text-xs font-black text-indigo-700'
-     }, `Gyorsválasztó: ${fmtCH(foodCH)}g CH`)
+     }, `Gyorsválasztó: ${fmtCH(foodCH)}g CH`),
+     h('p', {
+      className: 'text-[10px] text-gray-400'
+     }, '⏱️ ' + window.t('Az óra mezővel tételenként megadhatod, MIKOR fogyasztottad el az adott ételt — alapból a bejegyzés időpontja érvényes. A módosított időpontú tétel zöld kerettel jelenik meg, és a grafikonon meg az étkezés utáni emlékeztetőben a saját idejével számít.'))
     ),
     h('input', {
      type: 'number',
@@ -7230,7 +7292,8 @@ function ViewEntryModal({
       foods.map((f, i) => h('p', {
        key: i,
        className: 'text-sm text-gray-800 font-semibold pl-2'
-      }, '• ' + f.name + ' — ' + fmtCH(parseFloat(f.carbs) || 0) + 'g × ' + (parseFloat(f.mult) || 1) + ' = ' + fmtCH((parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1)) + 'g CH'))
+      }, '• ' + f.name + ' — ' + fmtCH(parseFloat(f.carbs) || 0) + 'g × ' + (parseFloat(f.mult) || 1) + ' = ' + fmtCH((parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1)) + 'g CH' +
+     (f.itemTime ? ' · ⏱️ ' + f.itemTime : ''))) /* v18.4: tétel saját időpontja */
      ),
      entry.carbs > 0 && row('🍽️', 'TELJES CH', fmtCH(entry.carbs) + ' g'),
     entry.fatProt && row('🥓', window.t('Zsíros, fehérjedús étel'), window.t('elnyújtott felszívódás — 2–3 óra múlva ellenőrző mérés javasolt')), /* v18 (6.3) */
@@ -7322,6 +7385,14 @@ function EditModal({
   foods: (p.foods || []).map(x => x.fid === fid ? {
    ...x,
    mult
+  } : x)
+ }));
+ /* v18.4: tételenkénti CH-időpont utólagos szerkesztésnél is */
+ const setItemTime = (fid, tm) => setForm(p => ({
+  ...p,
+  foods: (p.foods || []).map(x => x.fid === fid ? {
+   ...x,
+   itemTime: (tm && tm !== String(p.timestamp || '').slice(11, 16)) ? tm : null
   } : x)
  }));
  const foodCH = (form.foods || []).reduce((s, f) => s + (parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1), 0);
@@ -7507,6 +7578,14 @@ function EditModal({
         h('div', {
           className: 'flex items-center gap-1'
          },
+         /* v18.4: tételenkénti CH-időpont utólagos szerkesztésnél is */
+         h('input', {
+          type: 'time',
+          value: f.itemTime || String(form.timestamp || '').slice(11, 16),
+          onChange: e => setItemTime(f.fid, e.target.value),
+          title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
+          className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
+         }),
          h('select', {
            value: f.mult,
            onChange: e => setMult(f.fid, parseInt(e.target.value)),

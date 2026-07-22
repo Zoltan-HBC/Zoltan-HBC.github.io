@@ -8,6 +8,15 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.4 bővítés (2026. július 22.)
+
+- **⏱️ Tételenkénti CH-időpontok:** az étkezés minden ételéhez külön elfogyasztási
+  idő adható (alapból a bejegyzés időpontja érvényes) — új felvitelnél és utólagos
+  szerkesztésnél is. Az elnyújtott étkezés (pl. 12:45-ös ebéd + 16:10-es cappuccino)
+  így a valós idejével jelenik meg a CH-grafikonon, és az étkezés utáni mérési
+  emlékeztető is az utolsó CH-tétel idejétől számol. A módosított időpontú tétel
+  zöld kerettel jelölődik.
+
 ## v18.3 javítás (2026. július 22.)
 
 - **CH-táblázat kategória-gombok sötét módban:** a világos gombokon a felirat

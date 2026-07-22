@@ -8,6 +8,19 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.2 bővítés (2026. július 22.)
+
+- **📚 CH-táblázat böngészése:** a beépített magyar CH-táblázat (205 tétel) mostantól
+  kategória-gombokkal is böngészhető — az Új bejegyzés gyorsválasztójában ÉS az
+  Ételek oldal új, teljes listájában (keresővel, kategória-szűrővel); bármely tétel
+  a ➕ gombbal átemelhető a saját ételek közé
+
+## v18.1 javítás (2026. július 22.)
+
+- **IOB idő-csík az Áttekintésen:** az aktív inzulin csíkja nem látszott (a `h-2`
+  magasság-osztály hiányzott az előre fordított app.css-ből) — javítva, a csík
+  mostantól a Statisztika oldali IOB-sávval azonos módon jelenik meg
+
 ## Mit tud a v17-hez képest? (v18 újdonságok — 2026. július)
 
 - **📚 Beépített magyar CH-táblázat:** több száz magyar étel (pékáru, köretek, levesek,

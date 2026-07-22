@@ -214,6 +214,9 @@ input[type=range]{padding:0;border:none;background:transparent}
    „Tevékenység" címke (hbc-badge) a v12.3-as fix szerint világos marad. */
 [data-hbc-dark] .bg-yellow-50{background-color:#332e14!important}
 
+/* v18.1 FIX — az app.css-ből hiányzó h-2 osztály pótlása (IOB-csík az Áttekintésen) */
+.h-2{height:.5rem}
+
 /* ═══════════ v18 — NAGY BETŰS MÓD (6.7) ═══════════
    A html.hbc-bigfont osztályt az App kapcsolja a Beállítások szerint.
    A rem-alapú méretek automatikusan követik a gyökér betűméretet. */

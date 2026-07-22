@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18';
+const APP_VERSION = '18.2';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -4141,13 +4141,19 @@ function Dashboard({
       className: 'text-xs mt-2 bg-white/20 rounded-lg px-2 py-1 iob-p'
      },
      h('p', null, `🔄 IOB: ${iob.toFixed(1)}E aktív`),
-     /* v18: az eltelt időt/aktív mennyiséget mutató csík — a Statisztika oldali IOB-sávval azonos módon */
+     /* v18.1 JAVÍTÁS: a csík a Statisztika oldali IOB-sávval AZONOS osztályokat használja
+        (h-2.5) — a korábbi h-2 osztály hiányzott az előre fordított app.css-ből,
+        ezért a csík 0 magasságú, láthatatlan volt. Biztonsági inline magasság is. */
      h('div', {
-       className: 'bg-white/25 rounded-full h-2 mt-1'
+       className: 'bg-white/20 rounded-full h-2.5 mt-1',
+       style: {
+        height: '10px'
+       }
       },
       h('div', {
-       className: 'bg-white rounded-full h-2 transition-all',
+       className: 'bg-white rounded-full h-2.5 transition-all',
        style: {
+        height: '10px',
         width: `${Math.min(100, iob * 12)}%`
        }
       })))
@@ -6122,8 +6128,18 @@ function FoodManager({
  onUpdate,
  onDelete,
  showAlert,
- showConfirm
+ showConfirm,
+ settings /* v18.2: a beépített CH-táblázat kapcsolójához */
 }) {
+ /* v18.2: beépített magyar CH-táblázat böngészése kategóriánként */
+ const chTableOn = (settings && settings.featCHTable !== false) && Array.isArray(window.CH_TABLE);
+ const [chCat, setChCat] = useState('');
+ const [chSearch, setChSearch] = useState('');
+ const chCats = chTableOn ? [...new Set(window.CH_TABLE.map(x => x.cat))] : [];
+ const _bq = chSearch.trim().toLowerCase();
+ const chShown = !chTableOn ? [] : window.CH_TABLE
+  .map((x, i) => ({ ...x, id: 'cht' + i }))
+  .filter(x => (!chCat || x.cat === chCat) && (!_bq || (x.name + ' ' + x.cat).toLowerCase().includes(_bq)));
  const [editing, setEditing] = useState(null);
  const [eName, setEName] = useState('');
  const [eCarbs, setECarbs] = useState('');
@@ -6309,6 +6325,74 @@ function FoodManager({
      )
     ))
    )
+  ]),
+
+  /* ═══ v18.2: BEÉPÍTETT MAGYAR CH-TÁBLÁZAT — teljes, böngészhető lista ═══ */
+  chTableOn && card([
+   h('h2', {
+    className: 'font-black text-emerald-700 mb-1'
+   }, '📚 ' + window.t('Beépített magyar CH-táblázat') + ` (${window.CH_TABLE.length} ${window.t('tétel')})`),
+   h('p', {
+    className: 'text-sm text-gray-500 mb-3'
+   }, window.t('Kattints egy kategóriára, vagy keress! A ➕ gombbal bármely tétel átemelhető a saját ételeid közé, hogy a gyorsválasztó tetején legyen. Az értékek átlagos, kerekített értékek — a pontos CH terméktől függően eltérhet.')),
+   h('div', {
+     className: 'flex flex-wrap gap-1 mb-3'
+    },
+    h('button', {
+     type: 'button',
+     onClick: () => setChCat(''),
+     className: `px-3 py-1.5 rounded-xl text-xs font-bold ${chCat===''?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+    }, '✅ ' + window.t('Mind')),
+    chCats.map(c => h('button', {
+     type: 'button',
+     key: c,
+     onClick: () => setChCat(chCat === c ? '' : c),
+     className: `px-3 py-1.5 rounded-xl text-xs font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+    }, window.t(c)))),
+   h('input', {
+    type: 'text',
+    value: chSearch,
+    onChange: e => setChSearch(e.target.value),
+    placeholder: '🔍 ' + window.t('Keresés a táblázatban...'),
+    className: 'w-full border-2 border-emerald-200 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none focus:border-emerald-400'
+   }),
+   h('p', {
+    className: 'text-xs text-emerald-600 font-bold mb-2'
+   }, `${chShown.length} ${window.t('tétel látható')}`),
+   h('div', {
+     className: 'max-h-96 overflow-y-auto space-y-1'
+    },
+    chShown.map(f => h('div', {
+      key: f.id,
+      className: 'flex items-center justify-between bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-100'
+     },
+     h('div', {
+      className: 'flex-1'
+     }, h('p', {
+      className: 'text-xs font-bold text-gray-800'
+     }, f.name), h('p', {
+      className: 'text-xs text-gray-500'
+     }, `${fmtCH(f.carbs)}g CH / ${f.unit} · ${window.t(f.cat)}`)),
+     h('button', {
+      type: 'button',
+      title: window.t('Átemelés a saját ételek közé'),
+      onClick: () => {
+       if (allFoods.some(x => x.name === f.name)) {
+        showAlert && showAlert('ℹ️ ' + window.t('Ez az étel már szerepel a saját ételeid között.'));
+        return;
+       }
+       onAdd({
+        name: f.name,
+        carbs: f.carbs,
+        unit: f.unit,
+        isDefault: false
+       });
+       showAlert && showAlert('✅ ' + window.t('Átemelve a saját ételeid közé!') + ' (' + f.name + ')');
+      },
+      className: 'bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-700 ml-2 whitespace-nowrap'
+     }, '➕')
+    ))
+   )
   ])
  );
 }
@@ -6479,13 +6563,15 @@ function AddEntry({
  const [nfUnit, setNfUnit] = useState('');
 
  const shownFoods = allFoods.filter(f => f.name.toLowerCase().includes(fSearch.toLowerCase()));
- /* v18 (6.1): beépített magyar CH-táblázat találatai — kereséskor jelennek meg */
+ /* v18 (6.1): beépített magyar CH-táblázat — v18.2: kategória-gombokkal is böngészhető */
  const chTableOn = (settings && settings.featCHTable !== false) && Array.isArray(window.CH_TABLE);
- const chHits = (chTableOn && fSearch.trim().length >= 2) ?
-  window.CH_TABLE
-  .map((x, i) => ({ ...x, id: 'cht' + i }))
-  .filter(x => (x.name + ' ' + x.cat).toLowerCase().includes(fSearch.trim().toLowerCase()))
-  .slice(0, 30) : [];
+ const [chCat, setChCat] = useState('');
+ const chCats = chTableOn ? [...new Set(window.CH_TABLE.map(x => x.cat))] : [];
+ const _chq = fSearch.trim().toLowerCase();
+ const chPool = chTableOn ? window.CH_TABLE.map((x, i) => ({ ...x, id: 'cht' + i })) : [];
+ const chHits = !chTableOn ? [] :
+  _chq.length >= 2 ? chPool.filter(x => (x.name + ' ' + x.cat).toLowerCase().includes(_chq)).slice(0, 30) :
+  chCat ? chPool.filter(x => x.cat === chCat) : [];
  const addFoodToForm = (f, mult = 1) => setForm(p => ({
   ...p,
   foods: [...p.foods, {
@@ -6775,18 +6861,28 @@ function AddEntry({
        )
       ))
      ),
-     /* ═══ v18 (6.1): BEÉPÍTETT MAGYAR CH-TÁBLÁZAT ═══ */
+     /* ═══ v18 (6.1): BEÉPÍTETT MAGYAR CH-TÁBLÁZAT — v18.2: kategória-gombok ═══ */
      chTableOn && h('div', {
        className: 'mt-3 pt-3 border-t-2 border-emerald-200'
       },
       h('p', {
         className: 'text-xs font-black text-emerald-700 mb-2'
-       }, '📚 ' + window.t('Magyar CH-táblázat (beépített)') +
-       (fSearch.trim().length >= 2 ? ` — ${chHits.length} ${window.t('találat')}` : '')),
-      fSearch.trim().length < 2 ?
+       }, '📚 ' + window.t('Magyar CH-táblázat (beépített)') + ` (${chPool.length} ${window.t('tétel')})` +
+       (chHits.length ? ` — ${chHits.length} ${window.t('találat')}` : '')),
+      /* v18.2: kategória-gombok — egy koppintásra listázza a kategória tételeit */
+      h('div', {
+        className: 'flex flex-wrap gap-1 mb-2'
+       },
+       chCats.map(c => h('button', {
+        type: 'button',
+        key: c,
+        onClick: () => setChCat(chCat === c ? '' : c),
+        className: `px-2 py-1 rounded-lg text-[11px] font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+       }, window.t(c)))),
+      chHits.length === 0 && _chq.length < 2 ?
       h('p', {
        className: 'text-[11px] text-gray-400'
-      }, window.t('Írj be legalább 2 betűt a fenti keresőbe (pl. „kenyér", „alma", „rizs"), és a beépített táblázat találatai itt jelennek meg.')) :
+      }, window.t('Válassz fent kategóriát, vagy írj be legalább 2 betűt a keresőbe (pl. „kenyér", „alma", „rizs") — a beépített táblázat tételei itt jelennek meg.')) :
       h('div', {
         className: 'max-h-52 overflow-y-auto space-y-1'
        },
@@ -10451,7 +10547,8 @@ function App() {
     onUpdate: updateFood,
     onDelete: deleteFood,
     showAlert,
-    showConfirm
+    showConfirm,
+    settings: effSettings /* v18.2 */
    }),
    view === 'sync' && h(SyncManager, {
     entries,

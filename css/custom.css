@@ -217,6 +217,14 @@ input[type=range]{padding:0;border:none;background:transparent}
 /* v18.1 FIX — az app.css-ből hiányzó h-2 osztály pótlása (IOB-csík az Áttekintésen) */
 .h-2{height:.5rem}
 
+/* ═══════════ v18.3 FIX — CH-TÁBLÁZAT KATEGÓRIA-GOMBOK SÖTÉT MÓDBAN ═══════════
+   A kategória-gombok (és a zöld ➕/1×2×3× gombok) világos emerald hátterűek,
+   de a sötét mód a feliratukat világosra váltotta → olvashatatlan volt.
+   Megoldás (Zoltán kérése): sötét módban is PONTOSAN a világos módbeli
+   színpár marad — világos háttér + sötét felirat (a badge-fix mintájára). */
+[data-hbc-dark] .bg-emerald-100.text-emerald-700{background-color:#d1fae5!important;color:#047857!important}
+[data-hbc-dark] .bg-emerald-100.text-emerald-700:hover{background-color:#a7f3d0!important}
+
 /* ═══════════ v18 — NAGY BETŰS MÓD (6.7) ═══════════
    A html.hbc-bigfont osztályt az App kapcsolja a Beállítások szerint.
    A rem-alapú méretek automatikusan követik a gyökér betűméretet. */

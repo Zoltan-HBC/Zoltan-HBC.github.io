@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.2';
+const APP_VERSION = '18.3';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {

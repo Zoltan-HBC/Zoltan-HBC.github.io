@@ -8,6 +8,12 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.3 javítás (2026. július 22.)
+
+- **CH-táblázat kategória-gombok sötét módban:** a világos gombokon a felirat
+  világosra váltott és olvashatatlan volt — mostantól sötét módban is a világos
+  módbeli színpár marad (világos háttér + sötét zöld felirat)
+
 ## v18.2 bővítés (2026. július 22.)
 
 - **📚 CH-táblázat böngészése:** a beépített magyar CH-táblázat (205 tétel) mostantól

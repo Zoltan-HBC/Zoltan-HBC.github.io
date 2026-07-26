@@ -8,6 +8,20 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.6 javítás (2026. július 26.)
+
+- **⏱️ Tevékenység "-tól-ig" ideje visszafelé számolva:** a tevékenység (Egyéb
+  tevékenység / Kontroll) időtartam-csúszkája mostantól a bejegyzés (rögzítés)
+  időpontjából VISSZAFELÉ számolja a kezdetet, mert a tevékenység utólag, a
+  befejezése után kerül naplózásba. A "⏰ Pontos kezdés/befejezés megadása"
+  gombbal a Kezdete és a Vége órája külön is pontosítható — pl. ha a rögzítés
+  később történt, mint a tényleges befejezés. Az Áttekintésen és a bejegyzés
+  megtekintésénél mostantól a "-tól-ig" idősáv is látszik az időtartam mellett.
+- **📝 Elavult, automatikusan visszatérő jegyzet-szöveg megszüntetve:** egy régi
+  (v15 előtti) migrációs mechanizmus miatt egy törölt megjegyzés időnként
+  újra megjelent a legutóbbi vércukor-bejegyzés jegyzeteinél — a hibás
+  mechanizmus eltávolítva, a jelenség nem térhet vissza.
+
 ## v18.5 bővítés (2026. július 22.)
 
 - **🌓 Logó = sötét/világos váltó:** a bal felső TypeOneDiab logóra koppintva

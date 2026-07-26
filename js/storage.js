@@ -6,7 +6,11 @@
 window.HBC_STORE = (function() {
  const DB = 'hbc-diary',
   STORE = 'kv',
-  KEYS = ['hbc-v5-entries', 'hbc-v5-foods', 'hbc-v5-settings', 'hbc-v5-deleted', 'hbc-bgnote', 'hbc-lang', 'hbc-cgm', 'hbc-meta'];
+  /* v18.6: 'hbc-bgnote' kivéve — elavult (v15 előtti) kulcs volt, aminek az
+     IndexedDB-tükrözése miatt egy régi, törölt megjegyzés ismétlődően
+     visszaíródott a naplóba (ld. app.js). Az itt maradt IndexedDB-másolata
+     mostantól nem olvasódik vissza, mert nincs a listában. */
+  KEYS = ['hbc-v5-entries', 'hbc-v5-foods', 'hbc-v5-settings', 'hbc-v5-deleted', 'hbc-lang', 'hbc-cgm', 'hbc-meta'];
  let db = null;
 
  function open() {

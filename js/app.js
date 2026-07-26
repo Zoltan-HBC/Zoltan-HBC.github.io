@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.5';
+const APP_VERSION = '18.6';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3514,6 +3514,28 @@ const nowLocalDT = () => {
  const d = new Date(),
   p = n => String(n).padStart(2, '0');
  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+/* v18.6: adott "ÉÉÉÉ-HH-NNTÓÓ:PP" időponthoz percet ad/von (helyi idő szerint) —
+   a tevékenység "-tól-ig" visszafelé számításához (vége - időtartam = kezdete) */
+const addMinsLocalDT = (base, mins) => {
+ if (!base) return '';
+ try {
+  const d = new Date(base),
+   p = n => String(n).padStart(2, '0');
+  d.setMinutes(d.getMinutes() + (parseInt(mins) || 0));
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+ } catch (e) {
+  return '';
+ }
+};
+/* v18.6: két "ÉÉÉÉ-HH-NNTÓÓ:PP" időpont közti eltérés percben (kerekítve, negatív nem lehet) */
+const diffMinsLocalDT = (from, to) => {
+ if (!from || !to) return 0;
+ try {
+  return Math.max(0, Math.round((new Date(to) - new Date(from)) / 60000));
+ } catch (e) {
+  return 0;
+ }
 };
 const today = () => {
  const d = new Date();
@@ -3717,6 +3739,17 @@ function fmtDur(mins) {
  if (window.HBC_I18N.getLang() === 'en') return ((o ? o + ' h ' : '') + (p ? p + ' min' : '')).trim();
  return ((o ? o + ' ó ' : '') + (p ? p + ' p' : '')).trim();
 }
+/* v18.6: a tevékenység "-tól-ig" idősávja — ha van kézzel megadott pontos
+   Kezdete/Vége, azt mutatja; egyébként a bejegyzés időpontjából (= vége)
+   visszafelé, az időtartam alapján számolt sávot */
+function actRangeLbl(entry) {
+ const dur = parseInt(entry && entry.activityDur) || 0;
+ if (!entry) return '';
+ const to = entry.activityTo || entry.timestamp;
+ const from = entry.activityFrom || (dur > 0 ? addMinsLocalDT(to, -dur) : '');
+ if (!from || !to) return '';
+ return fmtTime(from) + '–' + fmtTime(to);
+}
 /* v18: CH érték mindig egy tizedessel jelenik meg (pl. 7.0), az app minden vizuális felületén */
 function fmtCH(v) {
  const n = parseFloat(v);
@@ -3822,7 +3855,8 @@ function EntryCard({
      }),
      entry.activity && h(Badge, {
       bg: 'bg-yellow-100 text-yellow-700',
-      text: '🏃 ' + entry.activity + (entry.activityDur > 0 ? ' · ' + fmtDur(entry.activityDur) : '')
+      /* v18.6: időtartam helyett/mellett a "-tól-ig" idősáv is látszik */
+      text: '🏃 ' + entry.activity + (entry.activityDur > 0 ? ' · ' + fmtDur(entry.activityDur) + (actRangeLbl(entry) ? ' (' + actRangeLbl(entry) + ')' : '') : '')
      }),
      /* v14: fizikai aktivitás szint (1–5, elnevezhető) */
      entry.activityLevel > 0 && h(Badge, {
@@ -6445,7 +6479,12 @@ function FoodManager({
    - Legördülő gyorsválasztó a KORÁBBAN felvitt tevékenységnevekből
    - Új tevékenység név szabadon beírható (a mentés után bekerül a gyorsválasztóba)
    - Tól–ig időtartam: 5 perces lépések, legfeljebb 4 óra
-   - Fizikai aktivitás jelző: 1–5 skála, a szintnevek a Beállításokban módosíthatók */
+   - Fizikai aktivitás jelző: 1–5 skála, a szintnevek a Beállításokban módosíthatók
+   v18.6: a tevékenység UTÓLAG kerül rögzítésre (a végén/befejezés után) — ezért a
+   csúszka a bejegyzés időpontjából VISSZAFELÉ számolja a kezdetet (kezdete = vége
+   − időtartam, ahol vége = a bejegyzés/rögzítés időpontja). Mivel a rögzítés akár
+   később is történhet, mint a tényleges befejezés, a Kezdete/Vége pontosan, külön
+   órával is felülírható ("Pontos kezdés/befejezés megadása"). */
 function ActivityFields({
  form,
  setForm,
@@ -6463,15 +6502,41 @@ function ActivityFields({
   }));
  };
  const dur = parseInt(form.activityDur) || 0;
- /* a tevékenység vége = bejegyzés időpontja + időtartam */
- let endLbl = '';
- if (dur > 0 && form.timestamp) {
-  try {
-   const d = new Date(form.timestamp);
-   d.setMinutes(d.getMinutes() + dur);
-   endLbl = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-  } catch (e) {}
- }
+ const baseTo = form.timestamp || nowLocalDT();
+ const defFrom = addMinsLocalDT(baseTo, -dur);
+ /* v18.6: pontos mód akkor aktív, ha a Kezdete/Vége bármelyike kézzel be van állítva */
+ const exact = !!(form.activityFrom || form.activityTo);
+ const rangeFrom = form.activityFrom || defFrom;
+ const rangeTo = form.activityTo || baseTo;
+ const rangeLbl = (rangeFrom && rangeTo) ? (fmtTime(rangeFrom) + '–' + fmtTime(rangeTo)) : '';
+ const setExactFrom = v => setForm(p => {
+  const to = p.activityTo || baseTo;
+  return {
+   ...p,
+   activityFrom: v,
+   activityTo: to,
+   activityDur: diffMinsLocalDT(v, to)
+  };
+ });
+ const setExactTo = v => setForm(p => {
+  const from = p.activityFrom || defFrom;
+  return {
+   ...p,
+   activityFrom: from,
+   activityTo: v,
+   activityDur: diffMinsLocalDT(from, v)
+  };
+ });
+ const startExact = () => setForm(p => ({
+  ...p,
+  activityFrom: defFrom,
+  activityTo: baseTo
+ }));
+ const clearExact = () => setForm(p => ({
+  ...p,
+  activityFrom: null,
+  activityTo: null
+ }));
  const lvl = parseInt(form.activityLevel) || 0;
  return h('div', {
    className: 'p-3 bg-yellow-50 rounded-2xl border-2 border-yellow-200 space-y-3'
@@ -6513,9 +6578,9 @@ function ActivityFields({
   h('div', null,
    h('label', {
      className: 'text-sm font-bold text-yellow-800 block mb-1'
-    }, '⏱️ ' + window.t('Időtartam (tól–ig)') + ': ' + (dur > 0 ? fmtDur(dur) : window.t('nincs megadva')) +
-    (endLbl ? ' (' + window.t('eddig') + ': ' + endLbl + ')' : '')),
-   h('input', {
+    }, '⏱️ ' + window.t('Időtartam (visszafelé, a rögzítés idejéig)') + ': ' + (dur > 0 ? fmtDur(dur) : window.t('nincs megadva')) +
+    ((rangeLbl && (dur > 0 || exact)) ? ' (' + rangeLbl + ')' : '')),
+   !exact && h('input', {
     type: 'range',
     min: '0',
     max: '240', /* v17: a tevékenység-időtartam csúszka 4 óráig (Zoltán kérése) */
@@ -6530,10 +6595,52 @@ function ActivityFields({
      minHeight: '30px'
     }
    }),
-   h('div', {
+   !exact && h('div', {
      className: 'flex justify-between text-[10px] text-yellow-700 font-bold'
     },
-    h('span', null, '0'), h('span', null, '1 ó'), h('span', null, '2 ó'), h('span', null, '3 ó'), h('span', null, '4 ó'))
+    h('span', null, '0'), h('span', null, '1 ó'), h('span', null, '2 ó'), h('span', null, '3 ó'), h('span', null, '4 ó')),
+   !exact && h('button', {
+    type: 'button',
+    onClick: startExact,
+    className: 'mt-2 w-full text-left text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 rounded-lg px-2 py-1.5'
+   }, '⏰ ' + window.t('Pontos kezdés/befejezés megadása')),
+   exact && h('div', {
+     className: 'mt-1 space-y-1.5'
+    },
+    h('div', {
+      className: 'flex gap-1 items-center'
+     },
+     h('span', {
+      className: 'text-[11px] font-bold text-yellow-700 w-14 shrink-0'
+     }, window.t('Kezdete')),
+     h('input', {
+      type: 'datetime-local',
+      value: rangeFrom,
+      onChange: e => setExactFrom(e.target.value),
+      className: 'flex-1 min-w-0 border-2 border-yellow-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-yellow-500'
+     })
+    ),
+    h('div', {
+      className: 'flex gap-1 items-center'
+     },
+     h('span', {
+      className: 'text-[11px] font-bold text-yellow-700 w-14 shrink-0'
+     }, window.t('Vége')),
+     h('input', {
+      type: 'datetime-local',
+      value: rangeTo,
+      onChange: e => setExactTo(e.target.value),
+      className: 'flex-1 min-w-0 border-2 border-yellow-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-yellow-500'
+     }),
+     h('button', {
+      type: 'button',
+      onClick: clearExact,
+      title: window.t('Vissza a csúszkás becsléshez'),
+      'aria-label': 'reset',
+      className: 'px-2 rounded-lg bg-gray-100 text-gray-500 text-xs font-bold'
+     }, '✖')
+    )
+   )
   ),
   h('div', null,
    h('label', {
@@ -6595,6 +6702,8 @@ function AddEntry({
   /* v14: tevékenység (név, időtartam, fizikai aktivitás) + privát jelölés */
   activity: '',
   activityDur: 0,
+  activityFrom: null, /* v18.6: pontos kezdés (ha felülírva) */
+  activityTo: null, /* v18.6: pontos befejezés (ha felülírva) */
   activityLevel: 0,
   private: false,
   fatProt: false /* v18 (6.3): zsíros/fehérjedús étel jelölés */
@@ -6705,6 +6814,9 @@ function AddEntry({
    /* v14: tevékenység-adatok Egyéb tevékenységnél ÉS Kontrollnál */
    activity: _hasAct ? (form.activity || '').trim() : '',
    activityDur: _hasAct ? (parseInt(form.activityDur) || 0) : 0,
+   /* v18.6: pontos kezdés/befejezés csak akkor tárolódik, ha kézzel be lett állítva */
+   activityFrom: (_hasAct && form.activityFrom) ? form.activityFrom : null,
+   activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
    private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
   });
@@ -7302,7 +7414,7 @@ function ViewEntryModal({
      entry.insulinLong > 0 && row('💉', ((settings && settings.basalName) || 'Lantus'),
       entry.insulinLong + ' E' + (entry.insulinLongTime && entry.insulinLongTime !== entry.timestamp ? ' · ⏰ ' + fmtAlwaysDT(entry.insulinLongTime) : '')),
      entry.activity && row('🏃', 'Tevékenység', entry.activity),
-     entry.activityDur > 0 && row('⏱️', 'Időtartam', fmtDur(entry.activityDur)),
+     entry.activityDur > 0 && row('⏱️', 'Időtartam', fmtDur(entry.activityDur) + (actRangeLbl(entry) ? ' (' + actRangeLbl(entry) + ')' : '')),
      entry.activityLevel > 0 && row('⚡', 'Fizikai aktivitás', entry.activityLevel + '/5 – ' + actLevelName(settings, entry.activityLevel)),
      entry.notes && h('div', {
        className: 'py-2'
@@ -7361,6 +7473,8 @@ function EditModal({
    /* v14: tevékenység + privát mezők alapértelmezései */
    activity: entry.activity || '',
    activityDur: parseInt(entry.activityDur) || 0,
+   activityFrom: entry.activityFrom ? entry.activityFrom.slice(0, 16) : null, /* v18.6 */
+   activityTo: entry.activityTo ? entry.activityTo.slice(0, 16) : null, /* v18.6 */
    activityLevel: parseInt(entry.activityLevel) || 0,
    private: !!entry.private
   };
@@ -7423,6 +7537,9 @@ function EditModal({
    /* v14: tevékenység-adatok Egyéb tevékenységnél ÉS Kontrollnál */
    activity: _hasAct ? (form.activity || '').trim() : '',
    activityDur: _hasAct ? (parseInt(form.activityDur) || 0) : 0,
+   /* v18.6: pontos kezdés/befejezés csak akkor tárolódik, ha kézzel be lett állítva */
+   activityFrom: (_hasAct && form.activityFrom) ? form.activityFrom : null,
+   activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
    private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
   });
@@ -9986,33 +10103,15 @@ function App() {
   }
  });
 
- /* v15: egyszeri migráció — a régi, különálló "hbc-bgnote" megjegyzés átkerül a
-    legutóbbi vércukor-bejegyzés notes mezőjébe (így látszik a Mai bejegyzéseknél,
-    szerkeszthető ott, szinkronizálódik, és a Követő is látja). Követőnél a helyi
-    jegyzet érvénytelen volt: csak törlődik. */
- const migrateBgNote = arr => {
-  const old = localStorage.getItem('hbc-bgnote');
-  if (old === null) return arr;
+ /* v18.6: a v15-ös "hbc-bgnote" egyszeri migráció eltávolítva — a storage.js
+    IndexedDB-tükrözése miatt a törölt kulcs minden induláskor visszaállt, ezért
+    egy régi, elavult megjegyzés ismétlődően visszaíródott a legutóbbi vércukor-
+    bejegyzés notes mezőjébe. A funkció, amit szolgált (a régi, különálló
+    "Legutóbbi vércukor" jegyzet átemelése a notes mezőbe), réges-rég lezajlott —
+    a kulcs innentől sem nem olvasódik, sem nem tükröződik (ld. storage.js KEYS). */
+ try {
   localStorage.removeItem('hbc-bgnote');
-  const fol = window.HBC_SYNC && window.HBC_SYNC.cfg.mode === 'follower';
-  if (fol || !old) return arr;
-  let idx = -1, best = '';
-  arr.forEach((e, i) => {
-   if (e && e.bloodGlucose && e.timestamp > best) {
-    best = e.timestamp;
-    idx = i;
-   }
-  });
-  if (idx === -1 || arr[idx].notes) return arr;
-  const out = arr.slice();
-  out[idx] = {
-   ...out[idx],
-   notes: old,
-   _mod: Date.now()
-  };
-  localStorage.setItem('hbc-v5-entries', JSON.stringify(out));
-  return out;
- };
+ } catch (e) {}
 
  useEffect(() => {
   const loadAll = () => {
@@ -10021,7 +10120,7 @@ function App() {
    const ss = localStorage.getItem('hbc-v5-settings');
    if (se) {
     try {
-     setEntries(migrateBgNote(JSON.parse(se)));
+     setEntries(JSON.parse(se));
     } catch (e) {}
    }
    if (sf) {

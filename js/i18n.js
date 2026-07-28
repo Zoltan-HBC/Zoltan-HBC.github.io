@@ -46,6 +46,9 @@ window.HBC_I18N = (function() {
   'Magyar CH-táblázat (beépített)': 'Hungarian carb table (built-in)',
   'találat': 'hits',
   'Válassz fent kategóriát, vagy írj be legalább 2 betűt a keresőbe (pl. „kenyér", „alma", „rizs") — a beépített táblázat tételei itt jelennek meg.': 'Choose a category above, or type at least 2 letters into the search box (e.g. "bread", "apple", "rice") — items of the built-in table appear here.',
+  /* v18.7: lenyitható/összecsukható listák (Ételek oldal) */
+  'Nyit': 'Open',
+  'Zár': 'Close',
   /* v18.5: logó = sötét/világos váltó */
   'Sötét/világos nézet váltása': 'Toggle dark/light view',
   /* v18.4: tételenkénti CH-időpontok */
@@ -279,6 +282,9 @@ window.HBC_I18N = (function() {
   'Beadás ideje eltér?': 'Injection time differs?',
   'Beadás időpontja': 'Injection time',
   'Vissza a bejegyzés időpontjára': 'Reset to the entry time',
+  /* ── v18.7 (feladat 6–7): külön vércukor mérési idő ── */
+  'Mérés ideje eltér?': 'Measurement time differs?',
+  'Mérés időpontja': 'Measurement time',
   '📡 CGM adatok importálása (LibreView / Dexcom CSV)': '📡 Import CGM data (LibreView / Dexcom CSV)',
   'CGM CSV fájl kiválasztása': 'Choose CGM CSV file',
   'Nincs még CGM-eszközöd? Az import LibreView/Clarity exportot fogad. Élő eszköz-csatlakozás előkészítve.': 'No CGM device yet? Import accepts LibreView/Clarity exports. Live device connection is prepared for the future.',

@@ -8,6 +8,47 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.7 javítás és bővítés (2026. július 28.)
+
+- **📱 "Bejegyzés szerkesztése" — hosszú ételnév tördelése:** a bejegyzéshez
+  hozzáadott ételek sora mobil álló nézetben hosszú ételnévnél korábban
+  töredezetten jelent meg, a ❌ törlés gomb kilógott a kártyából — mostantól a
+  sor szükség esetén tördelődik, a vezérlők (idő/szorzó/❌) sosem lógnak ki.
+  Ugyanez a javítás az Új bejegyzés űrlapján is.
+- **🩸 "Legutóbbi vércukor" nagy csempe — teljes tizedesjegy:** kerek mmol/l
+  érték (pl. 7.0) eddig csonkolva ("7") jelent meg ezen az egy csempén —
+  mostantól mindig a teljes, egy tizedesjegyes alakban látszik. Mg/dl esetén
+  (egész szám) a megjelenés változatlan. (A v18-as "CH értékek egységesen egy
+  tizedessel" javítás a szénhidrát-értékekre vonatkozott — ez a hiba
+  kifejezetten a vércukor-megjelenítést érintette, most ez is javítva.)
+- **📚 Beépített CH-táblázat a Bejegyzés szerkesztésében is:** az Új bejegyzés
+  ételválasztójában már elérhető, kategóriánként/kereséssel böngészhető
+  "Magyar CH-táblázat (beépített, 205 tétel)" mostantól a "Bejegyzés
+  szerkesztése" ablakban is elérhető, azonos működéssel.
+- **🥗 "Ételek" oldal — lenyitható listák:** az "Összes étel" lista és a
+  "Beépített magyar CH-táblázat (205 tétel)" mostantól lenyitható/összecsukható
+  kártyák, alapból ZÁRVA (asztali és mobil nézetben egyaránt) — gyorsabb
+  áttekintés, kevesebb görgetés.
+- **📅 "Mai bejegyzések" — asztali elrendezés és olvashatóság:** asztali nézetben
+  a dátum/idő blokk balra, a Típus + vércukor/CH/inzulin/tevékenység adatok
+  jobbra kerülnek (mobilon a korábbi elrendezés változatlan). A szövegek
+  betűmérete nőtt és kontrasztja erősödött, Világos és Sötét beállítás esetén
+  is, asztali ÉS mobil nézetben egyaránt.
+- **⏰ Típus szerinti alapértelmezett időpont + külön vércukor mérési idő:**
+  - Étkezésnél a bejegyzés FŐ időpontja automatikusan a legkorábbi
+    ételtétel-időponthoz igazodik (pl. 6:30-kor mért vércukor, majd 7:30-kor
+    elkezdett étkezés esetén a bejegyzés ideje 7:30-ra vált).
+  - A vércukor mérésének saját időpontja ekkor külön, változatlanul megmarad
+    (pl. "🩸 6,2 mmol/l · ⏰ 6:30"), és mindenhol megjelenik, ahol eltér a
+    bejegyzés fő idejétől: Mai bejegyzések kártya, Bejegyzés megtekintése,
+    Bejegyzés szerkesztése, CSV-export/import, e-mailes/PDF orvosi riport.
+  - Kontroll, Lantus és Egyéb tevékenység típusnál a fő időpont változatlanul
+    a felhasználó által megadott (mérés / beadás / kezdés) időpont; egy
+    esetlegesen hozzáadott "Tevékenység" adat nem írja felül.
+- **🧹 Kódtisztítás:** a fenti javítások mellett néhány, korábban duplikált és
+  soha nem érvényesülő sötét-módú CSS-szabály eltávolítva (a működést nem
+  érintette, mert a felülíró szabály eddig is érvényben volt).
+
 ## v18.6 javítás (2026. július 26.)
 
 - **⏱️ Tevékenység "-tól-ig" ideje visszafelé számolva:** a tevékenység (Egyéb

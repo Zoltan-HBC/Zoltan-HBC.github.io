@@ -56,8 +56,9 @@ input,select,textarea{min-height:38px}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{
   outline:2.5px solid var(--hbc-c1,#4f46e5);outline-offset:2px}
 /* v8 — sötét mód kontraszt-finomítás (WCAG AA) */
-[data-hbc-dark] .text-gray-400{color:#9d97bd!important}
-[data-hbc-dark] .text-indigo-400{color:#a3b0fa!important}
+/* v18.7 (feladat 8): két duplikált sötét-mód szabály törölve (.text-gray-400
+   és .text-indigo-400 itt) — mindkettőt felülírta egy lentebbi (v7.1-es)
+   azonos szelektorú szabály, tehát ezek korábban sem érvényesültek soha. */
 
 /* ═══════════ v7.1 — SÖTÉT MÓD ═══════════
    A [data-hbc-dark] attribútumot az App kapcsolja a Beállítások szerint. */
@@ -129,8 +130,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 /* ═══════════ v12.9 FIX — ÉTKEZÉS-CÍMKÉK (Reggeli, Ebéd, Vacsora…) SÖTÉT MÓDBAN ═══════════
    Az étkezéstípus kis címkéi eddig átszíneződtek sötét módban — kérésre ezek is
-   a világos módbeli színeiket tartják meg, a többi bejegyzés-címkével egységesen. */
-[data-hbc-dark] .hbc-badge.bg-amber-100{background-color:#fef3c7!important}
+   a világos módbeli színeiket tartják meg, a többi bejegyzés-címkével egységesen.
+   (v18.7 (feladat 8): a .bg-amber-100 duplikátum törölve — a v12.3-as fix már
+   tartalmazza ugyanazt az értéket, csak a .text-amber-800 volt itt új.) */
 [data-hbc-dark] .hbc-badge.text-amber-800{color:#92400e!important}
 [data-hbc-dark] .hbc-badge.bg-lime-100{background-color:#ecfccb!important}
 [data-hbc-dark] .hbc-badge.text-lime-800{color:#3f6212!important}
@@ -240,3 +242,37 @@ html.hbc-bigfont .text-\[10px\],html.hbc-bigfont .text-\[11px\]{font-size:.75rem
 [data-hbc-dark] .border-teal-200{border-color:#1f4a44!important}
 [data-hbc-dark] .border-emerald-200{border-color:#1f4a3a!important}
 [data-hbc-dark] .border-emerald-100{border-color:#1a3d31!important}
+
+/* ═══════════ v18.7 FIX (feladat 1) — ÉTELTÉTEL-SOR TÖRDELÉSE ═══════════
+   A "Bejegyzés szerkesztése" (és az "Új bejegyzés") ételei-listájának sora
+   hosszú ételnévnél nem tört sort — a jobb oldali vezérlők (idő/szorzó/❌
+   törlés gomb) kilógtak a kártyából mobil álló nézetben. Megoldás: a sor
+   flex-wrap-elhető, a névrésznek van egy minimális szélessége/tördelése,
+   a vezérlők pedig soha nem zsugorodnak össze — szükség esetén saját
+   sorba kerülnek. */
+.hbc-fooditem-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+.hbc-fooditem-name{flex:1 1 140px;min-width:140px}
+.hbc-fooditem-name p{overflow-wrap:break-word;word-break:break-word}
+.hbc-fooditem-ctrls{display:flex;align-items:center;gap:.25rem;flex-shrink:0}
+
+/* ═══════════ v18.7 FIX (feladat 5) — "MAI BEJEGYZÉSEK" KÁRTYÁK ═══════════
+   CSAK az Áttekintés "Mai bejegyzések" kártyáit érinti (hbc-entry-grid class,
+   az EntryCard emphasize=true módban kapja) — a Bejegyzések/Napló oldal
+   listája (emphasize nélkül) változatlan marad.
+   Mobilon a mai elrendezés (Típus+dátum egy sorban, alatta a badge-ek) marad,
+   csak a betűméret nő és a kontraszt erősödik. Asztali (768px+) nézetben a
+   dátum/idő blokk önálló bal oszlopba kerül, jobbra a Típus+badge-ek+jegyzet. */
+.hbc-entry-grid{display:grid;grid-template-columns:1fr auto;grid-template-areas:"type date" "badges badges" "notes notes";column-gap:.5rem;row-gap:.3rem}
+.hbc-entry-type{grid-area:type;min-width:0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.hbc-entry-date{grid-area:date;justify-self:end;align-self:start}
+.hbc-entry-badges{grid-area:badges}
+.hbc-entry-notes{grid-area:notes}
+@media(min-width:768px){
+  .hbc-entry-grid{grid-template-columns:minmax(110px,auto) 1fr;grid-template-areas:"date type" "date badges" "date notes";column-gap:1.25rem}
+  .hbc-entry-date{justify-self:start;align-self:start;text-align:left}
+}
+/* +2pt betűméret és erősebb kontraszt — asztali ÉS mobil nézetben egyaránt */
+.hbc-entry-typelabel{font-size:.9375rem!important}
+.hbc-entry-datetext{font-size:.875rem!important;color:#6b7280!important;font-weight:800!important}
+.hbc-entry-badges .hbc-badge{font-size:.875rem!important}
+[data-hbc-dark] .hbc-entry-datetext{color:#c7c2e0!important}

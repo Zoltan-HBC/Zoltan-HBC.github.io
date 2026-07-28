@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.6';
+const APP_VERSION = '18.7';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3695,7 +3695,11 @@ function Badge({
 function InsTimeField({
  value,
  base,
- onChange
+ onChange,
+ /* v18.7 (feladat 6–7): a komponens szövege paraméterezhető — így a vércukor
+    mérési idejéhez is felhasználható, nem csak az inzulin beadási idejéhez */
+ closedLabel = 'Beadás ideje eltér?',
+ openLabel = 'Beadás időpontja'
 }) {
  if (!value) return h('button', {
    type: 'button',
@@ -3703,13 +3707,13 @@ function InsTimeField({
    /* v12.6: helyi idő */
    className: 'mt-1 w-full text-left text-xs font-bold text-indigo-500 bg-indigo-50 border border-indigo-200 rounded-lg px-2 py-1.5'
   },
-  '⏰ ' + window.t('Beadás ideje eltér?'));
+  '⏰ ' + window.t(closedLabel));
  return h('div', {
    className: 'mt-1'
   },
   h('label', {
    className: 'text-[11px] font-bold text-indigo-500 block mb-0.5'
-  }, '⏰ ' + window.t('Beadás időpontja')),
+  }, '⏰ ' + window.t(openLabel)),
   h('div', {
     className: 'flex gap-1'
    },
@@ -3757,6 +3761,21 @@ function fmtCH(v) {
  return n.toFixed(1);
 }
 window.fmtCH = fmtCH;
+/* v18.7 (feladat 6–7): ÉTKEZÉSNÉL a bejegyzés FŐ időpontja a legkorábbi
+   ételtétel-időponthoz igazodik. Minden tétel effektív ideje: a saját
+   (kézzel beállított) itemTime-ja, vagy — ha nincs egyénileg beállítva —
+   a bejegyzés jelenlegi ideje. A legkorábbi effektív idő lesz az új fő
+   időpont (a dátumrész változatlan marad); ha nincs eltérés, nem történik
+   semmi. Csak Étkezés típusnál hívjuk (AddEntry/EditModal). */
+function mealTimestampFromFoods(foods, baseTimestamp) {
+ if (!Array.isArray(foods) || !foods.length || !baseTimestamp) return baseTimestamp;
+ const curTime = String(baseTimestamp).slice(11, 16);
+ const times = foods.map(f => f.itemTime || curTime);
+ const minTime = times.reduce((a, b) => (b < a ? b : a), times[0]);
+ if (!minTime || minTime === curTime) return baseTimestamp;
+ return String(baseTimestamp).slice(0, 10) + 'T' + minTime;
+}
+window.mealTimestampFromFoods = mealTimestampFromFoods;
 /* Fizikai aktivitás szintek (1–5) — a nevek a Beállításokban módosíthatók */
 const ACT_LEVEL_DEFAULTS = ['Nagyon könnyű', 'Könnyű', 'Közepes', 'Megerőltető', 'Nagyon megerőltető'];
 
@@ -3782,7 +3801,10 @@ function EntryCard({
  onEdit,
  onDelete,
  showDate,
- settings
+ settings,
+ emphasize /* v18.7 (feladat 5): CSAK az Áttekintés "Mai bejegyzések" kártyáin igaz —
+   asztali nézetben dátum/idő balra, Típus+badge-ek jobbra kerülnek, a szöveg nagyobb/
+   erősebb kontrasztú. A Bejegyzések/Napló oldal listája (emphasize nélkül) változatlan. */
 }) {
  /* v14: követő módban a kártya csak-olvasó — szem ikon, nincs törlés */
  const _ro = window.HBC_SYNC && window.HBC_SYNC.cfg.mode === 'follower';
@@ -3809,6 +3831,98 @@ function EntryCard({
  } : bg && bg > _high ? {
   borderLeft: '4px solid #ef4444'
  } : {};
+ /* v18.7 (feladat 5): a tartalom darabjait egyszer építjük fel, majd
+    emphasize esetén CSS Grid-es (hbc-entry-grid) szerkezetbe, egyébként a
+    régi, változatlan flex-szerkezetbe rendezzük — így a Bejegyzések/Napló
+    oldal (emphasize nélkül) pixelre ugyanaz marad, mint eddig. */
+ const typeRow = h(Fragment, null,
+  h('span', {
+   className: emphasize ? 'font-black text-gray-800 hbc-entry-typelabel' : 'font-black text-gray-800 text-sm'
+  }, entry.type),
+  /* v12.9: hbc-badge — az étkezés-címke sötét módban is a világos módbeli színeit tartja */
+  entry.mealType && h('span', {
+   className: `hbc-badge text-xs font-bold px-2 py-0.5 rounded-full ${mealC[entry.mealType]||'bg-gray-100 text-gray-600'}`
+  }, entry.mealType)
+ );
+ const dateNode = h('span', {
+  className: emphasize ? 'font-mono whitespace-nowrap hbc-entry-datetext' : 'text-xs text-gray-400 font-mono ml-auto whitespace-nowrap'
+ }, fmtAlwaysDT(entry.timestamp));
+ const badgeItems = [
+  bg && h(Badge, {
+   key: 'bg',
+   bg: bgBadge,
+   /* v18.7 (feladat 6–7): ha a mérés saját időpontja eltér a bejegyzés fő idejétől, az is látszik */
+   text: '🩸 ' + window.bgU.disp(bg) + ' ' + window.bgU.label() + (entry.bloodGlucoseTime && entry.bloodGlucoseTime !== entry.timestamp ? ' ⏰' + fmtTime(entry.bloodGlucoseTime) : '')
+  }),
+  entry.carbs > 0 && h(Badge, {
+   key: 'ch',
+   bg: 'bg-emerald-100 text-emerald-700',
+   text: '🍽️ ' + fmtCH(entry.carbs) + 'g CH' + (entry.fatProt ? ' 🥓' : '') /* v18 (6.3) */
+  }),
+  /* v12.3: ha a beadási idő eltér a bejegyzés időpontjától, a címkén ⏰ idő is látszik */
+  entry.insulinRapid > 0 && h(Badge, {
+   key: 'rapid',
+   bg: 'bg-blue-100 text-blue-700',
+   text: '💉 ' + entry.insulinRapid + 'E ' + ((settings && settings.rapidName) || 'Humalog') + (entry.insulinRapidTime && entry.insulinRapidTime !== entry.timestamp ? ' ⏰' + fmtTime(entry.insulinRapidTime) : '')
+  }),
+  entry.insulinLong > 0 && h(Badge, {
+   key: 'long',
+   bg: 'bg-purple-100 text-purple-700',
+   text: '💉 ' + entry.insulinLong + 'E ' + ((settings && settings.basalName) || 'Lantus') + (entry.insulinLongTime && entry.insulinLongTime !== entry.timestamp ? ' ⏰' + fmtTime(entry.insulinLongTime) : '')
+  }),
+  entry.activity && h(Badge, {
+   key: 'act',
+   bg: 'bg-yellow-100 text-yellow-700',
+   /* v18.6: időtartam helyett/mellett a "-tól-ig" idősáv is látszik */
+   text: '🏃 ' + entry.activity + (entry.activityDur > 0 ? ' · ' + fmtDur(entry.activityDur) + (actRangeLbl(entry) ? ' (' + actRangeLbl(entry) + ')' : '') : '')
+  }),
+  /* v14: fizikai aktivitás szint (1–5, elnevezhető) */
+  entry.activityLevel > 0 && h(Badge, {
+   key: 'lvl',
+   bg: 'bg-orange-100 text-orange-700',
+   text: '⚡ ' + entry.activityLevel + '/5 – ' + actLevelName(settings, entry.activityLevel)
+  }),
+  /* v14: privát bejegyzés jelölése — csak a Tulajdonos látja (követőhöz el sem jut) */
+  entry.private && h(Badge, {
+   key: 'priv',
+   bg: 'bg-gray-200 text-gray-700',
+   text: '🔒 ' + window.t('Privát')
+  })
+ ];
+ const notesNode = entry.notes && h('p', {
+  className: 'mt-1 text-xs text-gray-500 italic truncate'
+ }, '"' + entry.notes + '"');
+ const contentBlock = emphasize ?
+  h('div', {
+    className: 'hbc-entry-grid flex-1 min-w-0'
+   },
+   h('div', {
+    className: 'hbc-entry-type'
+   }, typeRow),
+   h('div', {
+    className: 'hbc-entry-date'
+   }, dateNode),
+   h('div', {
+    className: 'hbc-entry-badges flex flex-wrap gap-1.5'
+   }, badgeItems),
+   notesNode && h('div', {
+    className: 'hbc-entry-notes'
+   }, notesNode)
+  ) :
+  h('div', {
+    className: 'flex-1 min-w-0'
+   },
+   h('div', {
+     className: 'flex items-center gap-2 flex-wrap mb-1.5'
+    },
+    typeRow,
+    dateNode
+   ),
+   h('div', {
+     className: 'flex flex-wrap gap-1.5'
+    }, badgeItems),
+   notesNode
+  );
  return h('div', {
    className: `ecard border-2 rounded-xl p-3 ${typeC[entry.type]||'bg-gray-50 border-gray-200'}`,
    style: critStyle
@@ -3816,63 +3930,7 @@ function EntryCard({
   h('div', {
     className: 'flex items-start justify-between'
    },
-   h('div', {
-     className: 'flex-1 min-w-0'
-    },
-    h('div', {
-      className: 'flex items-center gap-2 flex-wrap mb-1.5'
-     },
-     h('span', {
-      className: 'font-black text-gray-800 text-sm'
-     }, entry.type),
-     /* v12.9: hbc-badge — az étkezés-címke sötét módban is a világos módbeli színeit tartja */
-     entry.mealType && h('span', {
-      className: `hbc-badge text-xs font-bold px-2 py-0.5 rounded-full ${mealC[entry.mealType]||'bg-gray-100 text-gray-600'}`
-     }, entry.mealType),
-     h('span', {
-      className: 'text-xs text-gray-400 font-mono ml-auto whitespace-nowrap'
-     }, fmtAlwaysDT(entry.timestamp))
-    ),
-    h('div', {
-      className: 'flex flex-wrap gap-1.5'
-     },
-     bg && h(Badge, {
-      bg: bgBadge,
-      text: '🩸 ' + window.bgU.disp(bg) + ' ' + window.bgU.label()
-     }),
-     entry.carbs > 0 && h(Badge, {
-      bg: 'bg-emerald-100 text-emerald-700',
-      text: '🍽️ ' + fmtCH(entry.carbs) + 'g CH' + (entry.fatProt ? ' 🥓' : '') /* v18 (6.3) */
-     }),
-     /* v12.3: ha a beadási idő eltér a bejegyzés időpontjától, a címkén ⏰ idő is látszik */
-     entry.insulinRapid > 0 && h(Badge, {
-      bg: 'bg-blue-100 text-blue-700',
-      text: '💉 ' + entry.insulinRapid + 'E ' + ((settings && settings.rapidName) || 'Humalog') + (entry.insulinRapidTime && entry.insulinRapidTime !== entry.timestamp ? ' ⏰' + fmtTime(entry.insulinRapidTime) : '')
-     }),
-     entry.insulinLong > 0 && h(Badge, {
-      bg: 'bg-purple-100 text-purple-700',
-      text: '💉 ' + entry.insulinLong + 'E ' + ((settings && settings.basalName) || 'Lantus') + (entry.insulinLongTime && entry.insulinLongTime !== entry.timestamp ? ' ⏰' + fmtTime(entry.insulinLongTime) : '')
-     }),
-     entry.activity && h(Badge, {
-      bg: 'bg-yellow-100 text-yellow-700',
-      /* v18.6: időtartam helyett/mellett a "-tól-ig" idősáv is látszik */
-      text: '🏃 ' + entry.activity + (entry.activityDur > 0 ? ' · ' + fmtDur(entry.activityDur) + (actRangeLbl(entry) ? ' (' + actRangeLbl(entry) + ')' : '') : '')
-     }),
-     /* v14: fizikai aktivitás szint (1–5, elnevezhető) */
-     entry.activityLevel > 0 && h(Badge, {
-      bg: 'bg-orange-100 text-orange-700',
-      text: '⚡ ' + entry.activityLevel + '/5 – ' + actLevelName(settings, entry.activityLevel)
-     }),
-     /* v14: privát bejegyzés jelölése — csak a Tulajdonos látja (követőhöz el sem jut) */
-     entry.private && h(Badge, {
-      bg: 'bg-gray-200 text-gray-700',
-      text: '🔒 ' + window.t('Privát')
-     })
-    ),
-    entry.notes && h('p', {
-     className: 'mt-1 text-xs text-gray-500 italic truncate'
-    }, '"' + entry.notes + '"')
-   ),
+   contentBlock,
    h('div', {
      className: 'flex gap-1 ml-2 shrink-0'
     },
@@ -4296,7 +4354,10 @@ function Dashboard({
      }, '🩸 Legutóbbi vércukor'),
      h('p', {
       className: 'text-5xl font-black'
-     }, String(window.bgU.disp(latestVal)), h('span', {
+     }, /* v18.7 FIX (feladat 2): kerek mmol/l érték (pl. 7.0) is teljes
+         alakban jelenjen meg, ne csak "7" — mg/dl-nél marad az egész szám */
+     (window.bgU.getUnit() === 'mgdl' ? String(window.bgU.disp(latestVal)) : window.bgU.disp(latestVal).toFixed(1)),
+     h('span', {
       className: 'text-xl ml-1'
      }, window.bgU.label())),
      h('p', {
@@ -4386,7 +4447,8 @@ function Dashboard({
     entry: e,
     onEdit,
     onDelete,
-    settings
+    settings,
+    emphasize: true /* v18.7 (feladat 5): csak itt (Mai bejegyzések) — asztali oldalcsere + nagyobb/erősebb szöveg */
    })))
   ])
  );
@@ -5108,7 +5170,7 @@ function generateDoctorReport(entries, settings, f, t, mode) {
  const fmtD = s => new Date(s + 'T00:00:00').toLocaleDateString(window.HBC_LOCALE());
  const rows = es.map(e => `<tr>
     <td>${esc(fmtAlwaysDT(e.timestamp))}</td><td>${esc(window.t(e.type||''))}${e.mealType?' – '+esc(window.t(e.mealType)):''}</td>
-    <td class="num">${e.bloodGlucose?esc(D(e.bloodGlucose)):''}</td>
+    <td class="num">${e.bloodGlucose?esc(D(e.bloodGlucose))+(e.bloodGlucoseTime&&e.bloodGlucoseTime!==e.timestamp?' ('+esc(fmtTime(e.bloodGlucoseTime))+')':''):''}</td>
     <td class="num">${e.carbs?fmtCH(e.carbs):''}</td>
     <td class="num">${e.insulinRapid?esc(e.insulinRapid)+(e.insulinRapidTime&&e.insulinRapidTime!==e.timestamp?' ('+esc(fmtTime(e.insulinRapidTime))+')':''):''}</td>
     <td class="num">${e.insulinLong?esc(e.insulinLong)+(e.insulinLongTime&&e.insulinLongTime!==e.timestamp?' ('+esc(fmtTime(e.insulinLongTime))+')':''):''}</td>
@@ -5234,7 +5296,7 @@ ${email?'':'<scr'+'ipt>setTimeout(function(){window.print();},400);</scr'+'ipt>'
    rows: es.map(e => [
     fmtAlwaysDT(e.timestamp),
     (window.t(e.type || '')) + (e.mealType ? ' – ' + window.t(e.mealType) : ''),
-    e.bloodGlucose ? String(D(e.bloodGlucose)) : '',
+    e.bloodGlucose ? String(D(e.bloodGlucose)) + (e.bloodGlucoseTime && e.bloodGlucoseTime !== e.timestamp ? ' (' + fmtTime(e.bloodGlucoseTime) + ')' : '') : '',
     e.carbs ? fmtCH(e.carbs) : '',
     e.insulinRapid ? String(e.insulinRapid) + (e.insulinRapidTime && e.insulinRapidTime !== e.timestamp ? ' (' + fmtTime(e.insulinRapidTime) + ')' : '') : '',
     e.insulinLong ? String(e.insulinLong) + (e.insulinLongTime && e.insulinLongTime !== e.timestamp ? ' (' + fmtTime(e.insulinLongTime) + ')' : '') : '',
@@ -6225,6 +6287,10 @@ function FoodManager({
  const [aCarbs, setACarbs] = useState('');
  const [aUnit, setAUnit] = useState('');
  const [search, setSearch] = useState('');
+ /* v18.7 FIX (feladat 4): mindkét lista (Összes étel / beépített CH-táblázat)
+    lenyitható-összecsukható, alapból ZÁRVA — desktop és mobil nézetben is */
+ const [openAllFoods, setOpenAllFoods] = useState(false);
+ const [openChTable, setOpenChTable] = useState(false);
 
  const shown = allFoods.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
  const startEdit = f => {
@@ -6304,20 +6370,26 @@ function FoodManager({
 
   // Lista
   card([
-   h('div', {
-     className: 'flex items-center justify-between mb-3'
+   h('button', {
+     type: 'button',
+     onClick: () => setOpenAllFoods(o => !o),
+     className: `w-full flex items-center justify-between ${openAllFoods ? 'mb-3' : ''}`,
+     'aria-expanded': openAllFoods
     },
     h('h2', {
      className: 'font-black text-gray-800'
-    }, `🥗 Összes étel (${allFoods.length})`)),
-   h('input', {
+    }, `🥗 Összes étel (${allFoods.length})`),
+    h('span', {
+     className: 'text-indigo-500 font-black text-sm'
+    }, openAllFoods ? '▲ ' + window.t('Zár') : '▼ ' + window.t('Nyit'))),
+   openAllFoods && h('input', {
     type: 'text',
     value: search,
     onChange: e => setSearch(e.target.value),
     placeholder: '🔍 Keresés...',
     className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:border-indigo-400'
    }),
-   h('div', {
+   openAllFoods && h('div', {
      className: 'space-y-2'
     },
     shown.map(f => h('div', {
@@ -6404,15 +6476,25 @@ function FoodManager({
    )
   ]),
 
-  /* ═══ v18.2: BEÉPÍTETT MAGYAR CH-TÁBLÁZAT — teljes, böngészhető lista ═══ */
+  /* ═══ v18.2: BEÉPÍTETT MAGYAR CH-TÁBLÁZAT — teljes, böngészhető lista ═══
+     v18.7 FIX (feladat 4): lenyitható-összecsukható, alapból ZÁRVA ═══ */
   chTableOn && card([
-   h('h2', {
-    className: 'font-black text-emerald-700 mb-1'
-   }, '📚 ' + window.t('Beépített magyar CH-táblázat') + ` (${window.CH_TABLE.length} ${window.t('tétel')})`),
-   h('p', {
+   h('button', {
+     type: 'button',
+     onClick: () => setOpenChTable(o => !o),
+     className: `w-full flex items-center justify-between ${openChTable ? 'mb-1' : ''}`,
+     'aria-expanded': openChTable
+    },
+    h('h2', {
+     className: 'font-black text-emerald-700'
+    }, '📚 ' + window.t('Beépített magyar CH-táblázat') + ` (${window.CH_TABLE.length} ${window.t('tétel')})`),
+    h('span', {
+     className: 'text-emerald-600 font-black text-sm'
+    }, openChTable ? '▲ ' + window.t('Zár') : '▼ ' + window.t('Nyit'))),
+   openChTable && h('p', {
     className: 'text-sm text-gray-500 mb-3'
    }, window.t('Kattints egy kategóriára, vagy keress! A ➕ gombbal bármely tétel átemelhető a saját ételeid közé, hogy a gyorsválasztó tetején legyen. Az értékek átlagos, kerekített értékek — a pontos CH terméktől függően eltérhet.')),
-   h('div', {
+   openChTable && h('div', {
      className: 'flex flex-wrap gap-1 mb-3'
     },
     h('button', {
@@ -6426,17 +6508,17 @@ function FoodManager({
      onClick: () => setChCat(chCat === c ? '' : c),
      className: `px-3 py-1.5 rounded-xl text-xs font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
     }, window.t(c)))),
-   h('input', {
+   openChTable && h('input', {
     type: 'text',
     value: chSearch,
     onChange: e => setChSearch(e.target.value),
     placeholder: '🔍 ' + window.t('Keresés a táblázatban...'),
     className: 'w-full border-2 border-emerald-200 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none focus:border-emerald-400'
    }),
-   h('p', {
+   openChTable && h('p', {
     className: 'text-xs text-emerald-600 font-bold mb-2'
    }, `${chShown.length} ${window.t('tétel látható')}`),
-   h('div', {
+   openChTable && h('div', {
      className: 'max-h-96 overflow-y-auto space-y-1'
     },
     chShown.map(f => h('div', {
@@ -6691,6 +6773,7 @@ function AddEntry({
   type: 'Étkezés',
   mealType: _defMeal,
   bloodGlucose: '',
+  bloodGlucoseTime: '', /* v18.7 (feladat 6–7): a vércukor mérésének saját időpontja, ha eltér a bejegyzés fő idejétől */
   carbs: '',
   insulinRapid: '',
   insulinLong: '',
@@ -6724,18 +6807,28 @@ function AddEntry({
  const chHits = !chTableOn ? [] :
   _chq.length >= 2 ? chPool.filter(x => (x.name + ' ' + x.cat).toLowerCase().includes(_chq)).slice(0, 30) :
   chCat ? chPool.filter(x => x.cat === chCat) : [];
- const addFoodToForm = (f, mult = 1) => setForm(p => ({
-  ...p,
-  foods: [...p.foods, {
+ /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
+    Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
+ const addFoodToForm = (f, mult = 1) => setForm(p => {
+  const foods = [...p.foods, {
    ...f,
    fid: Date.now(),
    mult
-  }]
- }));
- const removeFood = fid => setForm(p => ({
-  ...p,
-  foods: p.foods.filter(f => f.fid !== fid)
- }));
+  }];
+  return {
+   ...p,
+   foods,
+   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+  };
+ });
+ const removeFood = fid => setForm(p => {
+  const foods = p.foods.filter(f => f.fid !== fid);
+  return {
+   ...p,
+   foods,
+   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+  };
+ });
  const setMult = (fid, mult) => setForm(p => ({
   ...p,
   foods: p.foods.map(f => f.fid === fid ? {
@@ -6744,13 +6837,17 @@ function AddEntry({
   } : f)
  }));
  /* v18.4: tételenkénti CH-időpont ("ÓÓ:PP"); ha a bejegyzés idejével azonos, töröljük */
- const setItemTime = (fid, tm) => setForm(p => ({
-  ...p,
-  foods: p.foods.map(f => f.fid === fid ? {
+ const setItemTime = (fid, tm) => setForm(p => {
+  const foods = p.foods.map(f => f.fid === fid ? {
    ...f,
    itemTime: (tm && tm !== String(p.timestamp || '').slice(11, 16)) ? tm : null
-  } : f)
- }));
+  } : f);
+  return {
+   ...p,
+   foods,
+   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+  };
+ });
  const foodCH = form.foods.reduce((s, f) => s + f.carbs * f.mult, 0);
  const extraCH = parseFloat(form.carbs) || 0;
  const totalCH = foodCH + extraCH;
@@ -6806,6 +6903,9 @@ function AddEntry({
    fatProt: _hasCH ? !!form.fatProt : false, /* v18 (6.3) */
    mealType: form.type === 'Étkezés' ? form.mealType : '',
    bloodGlucose: _mmol,
+   /* v18.7 (feladat 6–7): a vércukor mérésének saját időpontja csak akkor
+      tárolódik, ha van érték ÉS eltér a bejegyzés (esetleg időközben módosult) fő időpontjától */
+   bloodGlucoseTime: (_mmol != null && form.bloodGlucoseTime && form.bloodGlucoseTime !== form.timestamp) ? form.bloodGlucoseTime : null,
    insulinRapid: (!_noRapid && form.insulinRapid) ? parseFloat(form.insulinRapid) : null,
    insulinLong: ((form.type === 'Lantus') && form.insulinLong) ? parseFloat(form.insulinLong) : null,
    /* v12.3: beadási idő csak akkor tárolódik, ha van dózis ÉS eltér a bejegyzés időpontjától */
@@ -6907,10 +7007,15 @@ function AddEntry({
       type: 'number',
       step: window.bgU.step(),
       value: form.bloodGlucose,
-      onChange: e => setForm({
-       ...form,
-       bloodGlucose: e.target.value
-      }),
+      onChange: e => setForm(p => ({
+       ...p,
+       bloodGlucose: e.target.value,
+       /* v18.7 (feladat 6–7): a mérés saját időpontja — első beíráskor a
+          bejegyzés AKKORI fő időpontja rögzül, így ha a fő időpont később
+          (pl. étkezésnél a legkorábbi ételtétel miatt) elmozdul, a mérés
+          ideje változatlan, korrekt marad */
+       bloodGlucoseTime: e.target.value ? (p.bloodGlucoseTime || p.timestamp) : ''
+      })),
       placeholder: window.bgU.getUnit() === 'mgdl' ? 'pl. 117' : 'pl. 6.5',
       className: 'flex-1 border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      }),
@@ -6921,14 +7026,26 @@ function AddEntry({
       onClick: () => window.HBC_BT.readLast(
        mmol => setForm(p => ({
         ...p,
-        bloodGlucose: String(window.bgU.getUnit() === 'mgdl' ? Math.round(mmol * 18.016) : mmol)
+        bloodGlucose: String(window.bgU.getUnit() === 'mgdl' ? Math.round(mmol * 18.016) : mmol),
+        bloodGlucoseTime: p.bloodGlucoseTime || p.timestamp
        })),
        msg => showAlert && showAlert('📶 ' + msg)),
       className: 'px-3 py-2 rounded-xl text-sm font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 whitespace-nowrap'
      }, '📶 BT')),
     (settings && settings.featBT !== false) && window.HBC_BT && !window.HBC_BT.supported() && h('p', {
      className: 'text-[11px] text-gray-400 mt-1'
-    }, window.t('A Bluetooth-átvétel Android telefonon, Chrome böngészőben működik. iPhone-on kézi bevitel szükséges.'))
+    }, window.t('A Bluetooth-átvétel Android telefonon, Chrome böngészőben működik. iPhone-on kézi bevitel szükséges.')),
+    /* v18.7 (feladat 6–7): a vércukor mérésének saját időpontja, ha eltér a bejegyzés fő idejétől */
+    form.bloodGlucose && h(InsTimeField, {
+     value: form.bloodGlucoseTime,
+     base: form.timestamp,
+     onChange: v => setForm({
+      ...form,
+      bloodGlucoseTime: v
+     }),
+     closedLabel: 'Mérés ideje eltér?',
+     openLabel: 'Mérés időpontja'
+    })
    ),
 
    /* v14: a teljes Ételek (gyorsválasztó) a KONTROLL típusnál is elérhető —
@@ -7089,17 +7206,19 @@ function AddEntry({
      },
      form.foods.map(f => h('div', {
        key: f.fid,
-       className: 'flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'
+       /* v18.7 FIX (feladat 1 — konzisztensen az Edit-modallal): flex-wrap,
+          hogy hosszú ételnévnél a vezérlők ne lógjanak ki */
+       className: 'hbc-fooditem-row bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'
       },
       h('div', {
-       className: 'flex-1'
+       className: 'hbc-fooditem-name'
       }, h('p', {
        className: 'text-xs font-bold text-gray-800'
       }, f.name), h('p', {
        className: 'text-xs text-gray-500'
       }, `${fmtCH(f.carbs)}g × ${f.mult} = ${fmtCH(f.carbs*f.mult)}g CH`)),
       h('div', {
-        className: 'flex items-center gap-1'
+        className: 'hbc-fooditem-ctrls'
        },
        /* v18.4: tételenkénti CH-időpont — alapból a bejegyzés ideje, szabadon finomítható */
        h('input', {
@@ -7122,7 +7241,9 @@ function AddEntry({
        h('button', {
         type: 'button',
         onClick: () => removeFood(f.fid),
-        className: 'text-red-500 p-1'
+        className: 'text-red-500 p-1 shrink-0',
+        'aria-label': 'Törlés',
+        title: 'Törlés'
        }, '❌')
       )
      )),
@@ -7394,7 +7515,9 @@ function ViewEntryModal({
      row('📝', 'Típus', window.t(entry.type || '')),
      entry.mealType && row('🍽️', 'Étkezés típusa', window.t(entry.mealType)),
      row('⏰', 'Időpont', fmtAlwaysDT(entry.timestamp)),
-     entry.bloodGlucose != null && entry.bloodGlucose !== '' && row('🩸', 'Vércukor', window.bgU.disp(entry.bloodGlucose) + ' ' + window.bgU.label()),
+     entry.bloodGlucose != null && entry.bloodGlucose !== '' && row('🩸', 'Vércukor', window.bgU.disp(entry.bloodGlucose) + ' ' + window.bgU.label() +
+     /* v18.7 (feladat 6–7): a mérés saját időpontja, ha eltér a bejegyzés fő idejétől */
+     (entry.bloodGlucoseTime && entry.bloodGlucoseTime !== entry.timestamp ? ' · ⏰ ' + fmtAlwaysDT(entry.bloodGlucoseTime) : '')),
      foods.length > 0 && h('div', {
        className: 'py-2 border-b border-indigo-50'
       },
@@ -7470,6 +7593,8 @@ function EditModal({
    insulinLongTime: entry.insulinLongTime ? entry.insulinLongTime.slice(0, 16) : '',
    carbs: extra ? String(Math.round(extra * 10) / 10) : '',
    bloodGlucose: entry.bloodGlucose != null && entry.bloodGlucose !== '' ? window.bgU.disp(entry.bloodGlucose) : '',
+   /* v18.7 (feladat 6–7): a vércukor mérésének saját időpontja, ha eltér a bejegyzés fő idejétől */
+   bloodGlucoseTime: entry.bloodGlucoseTime ? entry.bloodGlucoseTime.slice(0, 16) : '',
    /* v14: tevékenység + privát mezők alapértelmezései */
    activity: entry.activity || '',
    activityDur: parseInt(entry.activityDur) || 0,
@@ -7482,18 +7607,39 @@ function EditModal({
  const [showPicker, setShowPicker] = useState(false);
  const [fSearch, setFSearch] = useState('');
  const shownFoods = (allFoods || []).filter(f => f.name.toLowerCase().includes(fSearch.toLowerCase()));
- const addFoodToForm = (f, mult = 1) => setForm(p => ({
-  ...p,
-  foods: [...(p.foods || []), {
+ /* v18.7 FIX (feladat 3): a beépített magyar CH-táblázat (205 tétel) az Új
+    bejegyzésnél már böngészhető volt, de az Edit-modalból (Bejegyzés
+    szerkesztése) hiányzott — ugyanaz a logika, itt is elérhető. */
+ const chTableOn = (settings && settings.featCHTable !== false) && Array.isArray(window.CH_TABLE);
+ const [chCat, setChCat] = useState('');
+ const chCats = chTableOn ? [...new Set(window.CH_TABLE.map(x => x.cat))] : [];
+ const _chq = fSearch.trim().toLowerCase();
+ const chPool = chTableOn ? window.CH_TABLE.map((x, i) => ({ ...x, id: 'cht' + i })) : [];
+ const chHits = !chTableOn ? [] :
+  _chq.length >= 2 ? chPool.filter(x => (x.name + ' ' + x.cat).toLowerCase().includes(_chq)).slice(0, 30) :
+  chCat ? chPool.filter(x => x.cat === chCat) : [];
+ /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
+    Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
+ const addFoodToForm = (f, mult = 1) => setForm(p => {
+  const foods = [...(p.foods || []), {
    ...f,
    fid: Date.now(),
    mult
-  }]
- }));
- const removeFood = fid => setForm(p => ({
-  ...p,
-  foods: (p.foods || []).filter(x => x.fid !== fid)
- }));
+  }];
+  return {
+   ...p,
+   foods,
+   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+  };
+ });
+ const removeFood = fid => setForm(p => {
+  const foods = (p.foods || []).filter(x => x.fid !== fid);
+  return {
+   ...p,
+   foods,
+   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+  };
+ });
  const setMult = (fid, mult) => setForm(p => ({
   ...p,
   foods: (p.foods || []).map(x => x.fid === fid ? {
@@ -7502,13 +7648,17 @@ function EditModal({
   } : x)
  }));
  /* v18.4: tételenkénti CH-időpont utólagos szerkesztésnél is */
- const setItemTime = (fid, tm) => setForm(p => ({
-  ...p,
-  foods: (p.foods || []).map(x => x.fid === fid ? {
+ const setItemTime = (fid, tm) => setForm(p => {
+  const foods = (p.foods || []).map(x => x.fid === fid ? {
    ...x,
    itemTime: (tm && tm !== String(p.timestamp || '').slice(11, 16)) ? tm : null
-  } : x)
- }));
+  } : x);
+  return {
+   ...p,
+   foods,
+   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+  };
+ });
  const foodCH = (form.foods || []).reduce((s, f) => s + (parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1), 0);
  const totalCH = foodCH + (parseFloat(form.carbs) || 0);
  /* v14: az utólagos szerkesztés mezői PONTOSAN a típusnak megfelelően jelennek meg —
@@ -7529,6 +7679,9 @@ function EditModal({
    fatProt: showFoodEd ? !!form.fatProt : false, /* v18 (6.3) */
    mealType: form.type === 'Étkezés' ? (form.mealType || '') : '',
    bloodGlucose: _mmol,
+   /* v18.7 (feladat 6–7): a vércukor mérésének saját időpontja csak akkor
+      tárolódik, ha van érték ÉS eltér a bejegyzés fő időpontjától */
+   bloodGlucoseTime: (_mmol != null && form.bloodGlucoseTime && form.bloodGlucoseTime !== form.timestamp) ? form.bloodGlucoseTime : null,
    insulinRapid: (!_noRapid && form.insulinRapid) ? parseFloat(form.insulinRapid) : null,
    insulinLong: (showLong && form.insulinLong) ? parseFloat(form.insulinLong) : null,
    /* v12.3: beadási idő csak dózissal együtt, és csak ha eltér a bejegyzés időpontjától */
@@ -7620,11 +7773,25 @@ function EditModal({
       type: 'number',
       step: window.bgU.step(),
       value: form.bloodGlucose || '',
-      onChange: e => setForm({
-       ...form,
-       bloodGlucose: e.target.value
-      }),
+      onChange: e => setForm(p => ({
+       ...p,
+       bloodGlucose: e.target.value,
+       /* v18.7 (feladat 6–7): a mérés saját időpontja — első beíráskor a
+          bejegyzés AKKORI fő időpontja rögzül */
+       bloodGlucoseTime: e.target.value ? (p.bloodGlucoseTime || p.timestamp) : ''
+      })),
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
+     }),
+     /* v18.7 (feladat 6–7): a vércukor mérésének saját időpontja, ha eltér a bejegyzés fő idejétől */
+     form.bloodGlucose && h(InsTimeField, {
+      value: form.bloodGlucoseTime,
+      base: form.timestamp,
+      onChange: v => setForm({
+       ...form,
+       bloodGlucoseTime: v
+      }),
+      closedLabel: 'Mérés ideje eltér?',
+      openLabel: 'Mérés időpontja'
      })),
     h('div', null,
      /* v11.1: a bejegyzés ételeinek kezelése (hozzáadás gyorsválasztóból, szorzó, törlés) */
@@ -7676,6 +7843,65 @@ function EditModal({
           }, `${n}×`))
          )
         ))
+       ),
+       /* v18.7 FIX (feladat 3): a beépített magyar CH-táblázat (205 tétel) itt is
+          böngészhető — ugyanaz a logika, mint az Új bejegyzés űrlapján */
+       chTableOn && h('div', {
+         className: 'mt-3 pt-3 border-t-2 border-emerald-200'
+        },
+        h('p', {
+          className: 'text-xs font-black text-emerald-700 mb-2'
+         }, '📚 ' + window.t('Magyar CH-táblázat (beépített)') + ` (${chPool.length} ${window.t('tétel')})` +
+         (chHits.length ? ` — ${chHits.length} ${window.t('találat')}` : '')),
+        h('div', {
+          className: 'flex flex-wrap gap-1 mb-2'
+         },
+         chCats.map(c => h('button', {
+          type: 'button',
+          key: c,
+          onClick: () => setChCat(chCat === c ? '' : c),
+          className: `px-2 py-1 rounded-lg text-[11px] font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+         }, window.t(c)))),
+        chHits.length === 0 && _chq.length < 2 ?
+        h('p', {
+         className: 'text-[11px] text-gray-400'
+        }, window.t('Válassz fent kategóriát, vagy írj be legalább 2 betűt a keresőbe (pl. „kenyér", „alma", „rizs") — a beépített táblázat tételei itt jelennek meg.')) :
+        h('div', {
+          className: 'max-h-52 overflow-y-auto space-y-1'
+         },
+         chHits.length === 0 ? h('p', {
+          className: 'text-[11px] text-gray-400'
+         }, window.t('Nincs találat a beépített táblázatban.')) :
+         chHits.map(f => h('div', {
+           key: f.id,
+           className: 'flex items-center justify-between bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-100'
+          },
+          h('div', null, h('p', {
+           className: 'text-xs font-bold text-gray-800'
+          }, f.name), h('p', {
+           className: 'text-xs text-gray-500'
+          }, `${fmtCH(f.carbs)}g CH / ${f.unit} · ${f.cat}`)),
+          h('div', {
+            className: 'flex gap-1'
+           },
+           [1, 2, 3].map(n => h('button', {
+            type: 'button',
+            key: n,
+            onClick: () => addFoodToForm({
+             id: f.id,
+             name: f.name,
+             carbs: f.carbs,
+             unit: f.unit,
+             isDefault: false
+            }, n),
+            className: 'bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold hover:bg-emerald-200'
+           }, `${n}×`))
+          )
+         )),
+         h('p', {
+          className: 'text-[10px] text-gray-400 mt-1'
+         }, window.t('Átlagos, kerekített értékek — a pontos CH terméktől függően eltérhet.'))
+        )
        )
       ),
       (form.foods || []).length > 0 && h('div', {
@@ -7683,17 +7909,19 @@ function EditModal({
        },
        form.foods.map(f => h('div', {
          key: f.fid,
-         className: 'flex items-center justify-between bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'
+         /* v18.7 FIX (feladat 1): flex-wrap — hosszú ételnévnél a jobb oldali
+            vezérlők (idő/szorzó/❌) új sorba kerülnek, sosem lógnak ki a kártyából */
+         className: 'hbc-fooditem-row bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'
         },
         h('div', {
-         className: 'flex-1'
+         className: 'hbc-fooditem-name'
         }, h('p', {
          className: 'text-xs font-bold text-gray-800'
         }, f.name), h('p', {
          className: 'text-xs text-gray-500'
         }, `${f.carbs}g × ${f.mult} = ${fmtCH((parseFloat(f.carbs)||0)*(parseFloat(f.mult)||1))}g CH`)),
         h('div', {
-          className: 'flex items-center gap-1'
+          className: 'hbc-fooditem-ctrls'
          },
          /* v18.4: tételenkénti CH-időpont utólagos szerkesztésnél is */
          h('input', {
@@ -10348,10 +10576,11 @@ function App() {
 
  const exportCSV = () => {
   const s = sortedByTS(entries);
-  /* v12.3: + beadási idő oszlopok a végén (a régi importtal kompatibilis sorrendben) */
+  /* v12.3: + beadási idő oszlopok a végén (a régi importtal kompatibilis sorrendben)
+     v18.7 (feladat 6–7): + vércukor mérési idő oszlop a végén, ugyanezen elv szerint */
   const csv = [
-   ['Időpont', 'Típus', 'Vércukor (' + window.bgU.label() + ')', 'CH (g)', (settings.rapidName || 'Humalog') + ' (E)', (settings.basalName || 'Lantus') + ' (E)', 'Jegyzetek', (settings.rapidName || 'Humalog') + ' beadás', (settings.basalName || 'Lantus') + ' beadás'].join(','),
-   ...s.map(e => [new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()), e.type || '', e.bloodGlucose ? window.bgU.disp(e.bloodGlucose) : '', e.carbs || '', e.insulinRapid || '', e.insulinLong || '', `"${(e.notes||'').replace(/"/g,'""')}"`, e.insulinRapidTime || '', e.insulinLongTime || ''].join(','))
+   ['Időpont', 'Típus', 'Vércukor (' + window.bgU.label() + ')', 'CH (g)', (settings.rapidName || 'Humalog') + ' (E)', (settings.basalName || 'Lantus') + ' (E)', 'Jegyzetek', (settings.rapidName || 'Humalog') + ' beadás', (settings.basalName || 'Lantus') + ' beadás', 'Vércukor mérés ideje'].join(','),
+   ...s.map(e => [new Date(e.timestamp).toLocaleString(window.HBC_LOCALE()), e.type || '', e.bloodGlucose ? window.bgU.disp(e.bloodGlucose) : '', e.carbs || '', e.insulinRapid || '', e.insulinLong || '', `"${(e.notes||'').replace(/"/g,'""')}"`, e.insulinRapidTime || '', e.insulinLongTime || '', e.bloodGlucoseTime || ''].join(','))
   ].join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + csv], {
@@ -10418,6 +10647,8 @@ function App() {
      notes: (v[6] || '').replace(/^"|"$/g, ''),
      insulinRapidTime: (v[7] && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v[7])) ? v[7].slice(0, 16) : null,
      insulinLongTime: (v[8] && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v[8])) ? v[8].slice(0, 16) : null,
+     /* v18.7 (feladat 6–7): opcionális vércukor mérési idő oszlop (v[9]) */
+     bloodGlucoseTime: (v[9] && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v[9])) ? v[9].slice(0, 16) : null,
      foods: []
     };
    });

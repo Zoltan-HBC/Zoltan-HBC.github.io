@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.8';
+const APP_VERSION = '18.9';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3801,11 +3801,11 @@ function EntryCard({
  onEdit,
  onDelete,
  showDate,
- settings,
- emphasize /* v18.7 (feladat 5), v18.8 (feladat 1): CSAK az Áttekintés "Mai bejegyzések"
-   kártyáin igaz — a Típus alatt saját sorban, balra igazítva jelenik meg a dátum/idő
-   (mobilon és asztalin egyaránt), a szöveg nagyobb/erősebb kontrasztú. A Bejegyzések/
-   Napló oldal listája (emphasize nélkül) változatlan. */
+ settings
+ /* v18.9 (korrekció): a korábbi "emphasize" kapcsoló megszűnt — mostantól MINDEN
+   EntryCard (Áttekintés "Mai bejegyzések" ÉS Bejegyzések/Napló oldal egyaránt)
+   ugyanazt az egységes elrendezést és szövegméretet kapja: a Típus alatt saját
+   sorban, balra igazítva a dátum/idő, nagyobb/erősebb kontrasztú szöveggel. */
 }) {
  /* v14: követő módban a kártya csak-olvasó — szem ikon, nincs törlés */
  const _ro = window.HBC_SYNC && window.HBC_SYNC.cfg.mode === 'follower';
@@ -3832,14 +3832,13 @@ function EntryCard({
  } : bg && bg > _high ? {
   borderLeft: '4px solid #ef4444'
  } : {};
- /* v18.7 (feladat 5), v18.8 (feladat 1): a tartalom darabjait egyszer építjük
-    fel, majd emphasize esetén egy egyszerű, függőlegesen egymás alatti
-    szerkezetbe (Típus / dátum / badge-ek / jegyzet), egyébként a régi,
-    változatlan flex-szerkezetbe rendezzük — így a Bejegyzések/Napló oldal
-    (emphasize nélkül) pixelre ugyanaz marad, mint eddig. */
+ /* v18.9 (korrekció): a tartalom darabjait egyszer építjük fel, egységes,
+    függőlegesen egymás alatti szerkezetbe (Típus / dátum / badge-ek / jegyzet)
+    — ez most már MINDEN EntryCard-on (Áttekintés és Bejegyzések/Napló oldal
+    egyaránt) ugyanígy jelenik meg. */
  const typeRow = h(Fragment, null,
   h('span', {
-   className: emphasize ? 'font-black text-gray-800 hbc-entry-typelabel' : 'font-black text-gray-800 text-sm'
+   className: 'font-black text-gray-800 hbc-entry-typelabel'
   }, entry.type),
   /* v12.9: hbc-badge — az étkezés-címke sötét módban is a világos módbeli színeit tartja */
   entry.mealType && h('span', {
@@ -3847,7 +3846,7 @@ function EntryCard({
   }, entry.mealType)
  );
  const dateNode = h('span', {
-  className: emphasize ? 'font-mono whitespace-nowrap hbc-entry-datetext' : 'text-xs text-gray-400 font-mono ml-auto whitespace-nowrap'
+  className: 'font-mono whitespace-nowrap hbc-entry-datetext'
  }, fmtAlwaysDT(entry.timestamp));
  const badgeItems = [
   bg && h(Badge, {
@@ -3894,11 +3893,11 @@ function EntryCard({
  const notesNode = entry.notes && h('p', {
   className: 'mt-1 text-xs text-gray-500 italic truncate'
  }, '"' + entry.notes + '"');
- /* v18.8 (feladat 1): a korábbi, asztalin külön oszlopos (grid) elrendezés
-    helyett EGYSÉGES, függőleges elrendezés — mobilon és asztalin egyaránt:
+ /* v18.8 (feladat 1) / v18.9 (korrekció): EGYSÉGES, függőleges elrendezés —
+    mobilon és asztalin, Áttekintés és Bejegyzések/Napló oldalon egyaránt:
     Típus, alatta (saját sorban, balra igazítva) a dátum/idő, majd a többi
     adat-címke, majd a jegyzet. Több magasságot foglal, de olvashatóbb. */
- const contentBlock = emphasize ?
+ const contentBlock =
   h('div', {
     className: 'flex-1 min-w-0'
    },
@@ -3910,20 +3909,6 @@ function EntryCard({
     }, dateNode),
    h('div', {
      className: 'hbc-entry-badges flex flex-wrap gap-1.5'
-    }, badgeItems),
-   notesNode
-  ) :
-  h('div', {
-    className: 'flex-1 min-w-0'
-   },
-   h('div', {
-     className: 'flex items-center gap-2 flex-wrap mb-1.5'
-    },
-    typeRow,
-    dateNode
-   ),
-   h('div', {
-     className: 'flex flex-wrap gap-1.5'
     }, badgeItems),
    notesNode
   );
@@ -4451,8 +4436,7 @@ function Dashboard({
     entry: e,
     onEdit,
     onDelete,
-    settings,
-    emphasize: true /* v18.7 (feladat 5): csak itt (Mai bejegyzések) — asztali oldalcsere + nagyobb/erősebb szöveg */
+    settings
    })))
   ])
  );

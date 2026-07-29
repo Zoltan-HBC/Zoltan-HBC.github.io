@@ -8,6 +8,18 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.9 korrekció (2026. július 29.)
+
+- **📋 "Bejegyzések" (Napló) oldal — egységes elrendezés az Áttekintéssel:** a
+  v18.8-ban bevezetett "Mai bejegyzések" elrendezés (Típus felül, alatta saját
+  sorban, balra igazítva a dátum/idő, majd a többi adat-címke, majd a jegyzet,
+  nagyobb/erősebb kontrasztú szöveggel) mostantól a Bejegyzések/Napló oldal
+  listáján is pontosan így jelenik meg — mobilon és asztalin egyaránt.
+- **🧹 Kódtisztítás:** a bejegyzéskártya korábbi "emphasize" kapcsolója (ami
+  addig az Áttekintés és a Napló oldal eltérő elrendezését/betűméretét
+  vezérelte) megszűnt — mivel mindkét oldal ugyanazt az elrendezést kapja,
+  a kapcsoló és a hozzá tartozó elágazások feleslegessé váltak.
+
 ## v18.8 finomítás (2026. július 29.)
 
 - **📅 "Mai bejegyzések" — egyszerűsített elrendezés:** a v18.7-ben bevezetett,

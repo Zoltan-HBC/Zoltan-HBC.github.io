@@ -255,15 +255,12 @@ html.hbc-bigfont .text-\[10px\],html.hbc-bigfont .text-\[11px\]{font-size:.75rem
 .hbc-fooditem-name p{overflow-wrap:break-word;word-break:break-word}
 .hbc-fooditem-ctrls{display:flex;align-items:center;gap:.25rem;flex-shrink:0}
 
-/* ═══════════ v18.7 (feladat 5) / v18.8 FIX (feladat 1) — "MAI BEJEGYZÉSEK" KÁRTYÁK ═══════════
-   CSAK az Áttekintés "Mai bejegyzések" kártyáit érinti (az EntryCard
-   emphasize=true módban kapja ezeket az osztályokat) — a Bejegyzések/Napló
-   oldal listája (emphasize nélkül) változatlan marad.
-   v18.8: a korábbi, asztalin külön oszlopos (CSS Grid) elrendezés helyett
-   egyszerű, függőlegesen egymás alatti szerkezet — mobilon és asztalin
-   egyaránt: Típus, alatta (saját sorban, balra igazítva) a dátum/idő, majd
-   a többi adat-címke, majd a jegyzet. A rétegezést maga a JSX (EntryCard)
-   végzi, itt csak a betűméret/kontraszt-erősítés maradt. */
+/* ═══════════ v18.7 (feladat 5) / v18.8 (feladat 1) / v18.9 (korrekció) —
+   BEJEGYZÉS-KÁRTYÁK (Áttekintés "Mai bejegyzések" ÉS Bejegyzések/Napló oldal) ═══════════
+   v18.9: a korábbi "emphasize" kapcsoló megszűnt — ez a betűméret/kontraszt-
+   erősítés mostantól MINDEN bejegyzéskártyán érvényesül, nem csak az
+   Áttekintésen. Az elrendezést (Típus, alatta saját sorban balra a dátum/idő,
+   majd a többi adat-címke, majd a jegyzet) maga a JSX (EntryCard) végzi. */
 .hbc-entry-typelabel{font-size:.9375rem!important}
 .hbc-entry-datetext{font-size:.875rem!important;color:#6b7280!important;font-weight:800!important}
 .hbc-entry-badges .hbc-badge{font-size:.875rem!important}

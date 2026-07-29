@@ -146,6 +146,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 [data-hbc-dark] .hbc-badge.text-indigo-800{color:#3730a3!important}
 [data-hbc-dark] .hbc-badge.bg-gray-100{background-color:#f3f4f6!important}
 [data-hbc-dark] .hbc-badge.text-gray-600{color:#4b5563!important}
+/* v19: aktivitás/hőség profil badge — a többi címkével azonosan világos marad sötét módban is */
+[data-hbc-dark] .hbc-badge.bg-teal-100{background-color:#ccfbf1!important}
+[data-hbc-dark] .hbc-badge.text-teal-700{color:#0f766e!important}
 
 /* ═══════════ v10 FIX — HIÁNYZÓ TAILWIND-OSZTÁLYOK PÓTLÁSA ═══════════
    A css/app.css előre fordított Tailwind-fájl, amelyből a v9/v10-ben

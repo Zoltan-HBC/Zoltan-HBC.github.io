@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v18 Personal APP
+# HBC Diabétesz Napló v19 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).
@@ -7,6 +7,34 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 1. **TELEPITESI_UTMUTATO.md** — közzététel (GitHub Pages, ingyenes) + telepítés minden eszközre
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
+
+## v19.1 kiegészítés (2026. július 29.)
+
+- **👁️ "Szem" nézet Tulajdonos módban is:** az "Áttekintés" oldal "Mai bejegyzések"
+  kártyáin és a "Bejegyzések" oldal listájában a Tulajdonos (nem csak a Követő)
+  is kap egy 👁️ gombot minden bejegyzésen — ugyanaz a csak-olvasó részletnézet
+  nyílik meg, amit eddig csak a Követő látott. A ✏️ szerkesztés-gomb változatlanul,
+  külön elérhető marad.
+
+## v19.0 új szolgáltatás (2026. július 29.)
+
+- **🌡️ Aktivitás/hőség profilok:** szabadon szerkeszthető preset-lista (Beállítások →
+  Aktivitás/hőség profilok) — pl. „Könnyű házimunka”, „Kerti munka – enyhén/extrém
+  meleg” — mindegyik reggel/délben/este saját %-os bólus-csökkentéssel + szabad
+  szöveges "javasolt extra CH" emlékeztetővel (pl. „Szőlőcukor 2 db / 10g CH”).
+  Alapból be van kapcsolva (Beállítások → Új szolgáltatások (v19), ki-be kapcsolható).
+- **📍 Alkalmazás Új bejegyzésnél:** a bólus-kalkulátor kártyán opcionális profil-
+  választó + hőmérséklet mező (📍 Lekérdezés gomb: helyadat + ingyenes Open-Meteo
+  API, vagy kézi bevitel) — a kiválasztott profil a napszaknak megfelelő %-kal
+  korrigálja a javasolt adagot, badge mutatja a korrekciót és az emlékeztetőt.
+  A mentéskor alkalmazott név/%/hőmérséklet rögzül a bejegyzésen (a profil későbbi
+  szerkesztése/törlése nem módosítja visszamenőleg a már mentett bejegyzéseket).
+  Megjelenik a bejegyzés-kártyán (badge) és a bejegyzés-részletekben is.
+- **📊 Visszatekintő elemzés (Statisztika oldal):** állítható időszak (napban)
+  alapján, profilonként megmutatja az azt követő mérések átlagos elmozdulását, és
+  tájékoztató javaslatot ad (nagyobb/kisebb csökkentés indokolt lehet-e) — csak
+  javaslat, semmit nem ír át automatikusan, "⚠️ Orvossal egyeztess!" jelzéssel.
+- Ez a funkció a `HBC_App_v19` mappában él (a `HBC_App_v18.7` változatlan marad).
 
 ## v18.9 korrekció (2026. július 29.)
 

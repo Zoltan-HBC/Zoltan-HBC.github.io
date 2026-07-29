@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.9';
+const APP_VERSION = '19.1';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3776,6 +3776,82 @@ function mealTimestampFromFoods(foods, baseTimestamp) {
  return String(baseTimestamp).slice(0, 10) + 'T' + minTime;
 }
 window.mealTimestampFromFoods = mealTimestampFromFoods;
+
+/* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — megosztott segédfüggvények (AddEntry + EditModal) ═══
+   A hőmérséklet-lekérdezés SOHA nem automatikus/háttérfolyamat — csak a felhasználó
+   kifejezett gombnyomására fut le, és bármikor felülírható kézzel. Sikertelen/megtagadott
+   eset esetén a hívó egyszerűen kézi beviteli mezőt kínál tovább — az app offline-first
+   jellege nem sérül. Kulcs nélküli, ingyenes szolgáltatás: Open-Meteo. */
+function fetchDeviceWeather(onOk, onErr) {
+ if (!navigator.geolocation) { onErr && onErr('A böngésző nem támogatja a helyadatot.'); return; }
+ navigator.geolocation.getCurrentPosition(
+  pos => {
+   const { latitude, longitude } = pos.coords;
+   fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m`)
+    .then(r => r.json())
+    .then(data => {
+     const temp = data && data.current && data.current.temperature_2m;
+     if (temp == null || isNaN(temp)) { onErr && onErr('Nem érkezett hőmérséklet-adat.'); return; }
+     onOk && onOk(Math.round(temp * 10) / 10);
+    })
+    .catch(() => onErr && onErr('Nem sikerült elérni az időjárás-szolgáltatást.'));
+  },
+  () => onErr && onErr('Nincs engedély a helyadat lekéréséhez.'),
+  { timeout: 10000 }
+ );
+}
+window.fetchDeviceWeather = fetchDeviceWeather;
+
+/* A bejegyzés időpontja szerinti napszak-kulcs — ugyanaz a reggel/délben/este
+   határ (ib1/ib2), amit a bólus-ICR számítás is használ, konzisztencia céljából. */
+function actProfileDaypartKey(timestamp, settings) {
+ const hourNow = new Date(timestamp || Date.now()).getHours();
+ const _ib1 = (settings && settings.ib1 != null) ? settings.ib1 : 10;
+ const _ib2 = (settings && settings.ib2 != null) ? settings.ib2 : 16;
+ return hourNow < _ib1 ? 'morningPct' : hourNow < _ib2 ? 'noonPct' : 'eveningPct';
+}
+window.actProfileDaypartKey = actProfileDaypartKey;
+
+/* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — visszatekintő elemzés (Statisztika oldal) ═══
+   Csak TÁJÉKOZTATÓ jellegű — semmit nem ír át automatikusan, a felhasználó dönt.
+   Minden profillal jelölt, vércukor-értékkel rendelkező bejegyzéshez megkeresi az
+   időrendben KÖVETKEZŐ, 30–360 percen belüli mérést, és ebből számol átlagos
+   elmozdulást profilonként — ez adja a visszajelzés alapját. */
+function activityProfileAnalysis(entries, sinceDays) {
+ const cutoff = subD(sinceDays || 30);
+ const all = (entries || []).filter(e => e.timestamp).slice().sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+ const groups = {};
+ all.forEach((e, idx) => {
+  if (!(e.activityProfileId && e.activityProfilePct)) return;
+  if (e.timestamp.slice(0, 10) < cutoff) return;
+  if (e.bloodGlucose == null || e.bloodGlucose === '') return;
+  let next = null;
+  for (let i = idx + 1; i < all.length; i++) {
+   const cand = all[i];
+   if (cand.bloodGlucose == null || cand.bloodGlucose === '') continue;
+   const dtMin = (new Date(cand.timestamp) - new Date(e.timestamp)) / 60000;
+   if (dtMin > 360) break;
+   if (dtMin >= 30) { next = cand; }
+   break;
+  }
+  if (!next) return;
+  const delta = parseFloat(next.bloodGlucose) - parseFloat(e.bloodGlucose);
+  const key = e.activityProfileId;
+  if (!groups[key]) groups[key] = { name: e.activityProfileName || key, n: 0, sumDelta: 0, sumPct: 0 };
+  groups[key].n++;
+  groups[key].sumDelta += delta;
+  groups[key].sumPct += (parseFloat(e.activityProfilePct) || 0);
+ });
+ return Object.keys(groups).map(k => ({
+  id: k,
+  name: groups[k].name,
+  n: groups[k].n,
+  avgDelta: groups[k].sumDelta / groups[k].n,
+  avgPct: groups[k].sumPct / groups[k].n
+ })).sort((a, b) => b.n - a.n);
+}
+window.activityProfileAnalysis = activityProfileAnalysis;
+
 /* Fizikai aktivitás szintek (1–5) — a nevek a Beállításokban módosíthatók */
 const ACT_LEVEL_DEFAULTS = ['Nagyon könnyű', 'Könnyű', 'Közepes', 'Megerőltető', 'Nagyon megerőltető'];
 
@@ -3800,6 +3876,8 @@ function EntryCard({
  entry,
  onEdit,
  onDelete,
+ onView, /* v19.1: Tulajdonos módban is elérhető, csak-olvasó "szem" nézet (a Követő
+   nézetével azonos ViewEntryModal) — a szerkesztés (ceruza) ettől függetlenül marad */
  showDate,
  settings
  /* v18.9 (korrekció): a korábbi "emphasize" kapcsoló megszűnt — mostantól MINDEN
@@ -3888,7 +3966,14 @@ function EntryCard({
    key: 'priv',
    bg: 'bg-gray-200 text-gray-700',
    text: '🔒 ' + window.t('Privát')
-  })
+  }),
+  /* v19: aktivitás/hőség profil — a mentéskor rögzített név + % (nem a jelenlegi
+     Beállítások-beli profil, ami időközben módosulhatott/törlődhetett) */
+  entry.activityProfileId && entry.activityProfilePct ? h(Badge, {
+   key: 'actp',
+   bg: 'bg-teal-100 text-teal-700',
+   text: '🌡️ ' + entry.activityProfileName + ' ' + (entry.activityProfilePct > 0 ? '+' : '') + entry.activityProfilePct + '%' + (entry.weatherTemp != null && entry.weatherTemp !== '' ? ' · ' + entry.weatherTemp + '°C' : '')
+  }) : null
  ];
  const notesNode = entry.notes && h('p', {
   className: 'mt-1 text-xs text-gray-500 italic truncate'
@@ -3937,6 +4022,19 @@ function EntryCard({
      size: 18
     })) :
     h(Fragment, null,
+     /* v19.1: Tulajdonos módban is elérhető "szem" gomb — ugyanaz a csak-olvasó
+        részletnézet (ViewEntryModal), mint amit a Követő lát. A szerkesztés
+        (ceruza) ettől függetlenül, változatlanul elérhető marad. */
+     onView && h('button', {
+      onClick: () => onView(entry),
+      className: 'p-2 text-purple-400 hover:text-purple-600 rounded-lg',
+      type: 'button',
+      title: 'Részletek megtekintése',
+      'aria-label': 'Részletek megtekintése'
+     }, h(Icon, {
+      name: 'eye',
+      size: 16
+     })),
      h('button', {
       onClick: () => onEdit(entry),
       className: 'p-2 text-indigo-400 hover:text-indigo-600 rounded-lg',
@@ -3968,6 +4066,7 @@ function Dashboard({
  entries,
  onEdit,
  onDelete,
+ onView, /* v19.1: Tulajdonos módban is elérhető csak-olvasó "szem" nézet */
  settings,
  onAdd,
  onNoteSave /* v15: a Legutóbbi vércukor kártya megjegyzése a bejegyzésbe mentődik; követőnél null (csak olvasás) */
@@ -4436,6 +4535,7 @@ function Dashboard({
     entry: e,
     onEdit,
     onDelete,
+    onView,
     settings
    })))
   ])
@@ -4804,6 +4904,7 @@ function EntriesList({
  entries,
  onEdit,
  onDelete,
+ onView, /* v19.1: Tulajdonos módban is elérhető csak-olvasó "szem" nézet */
  settings
 }) {
  const [mode, setMode] = useState('day');
@@ -4987,6 +5088,7 @@ function EntriesList({
     entry: e,
     onEdit,
     onDelete,
+    onView,
     showDate: mode === 'custom' || (searchOn && q.trim() !== ''), /* v18: keresésnél dátum is látszik */
     settings
    })))
@@ -5580,6 +5682,9 @@ function Statistics({
  const [mode, setMode] = useState('7');
  const [fromD, setFromD] = useState(subD(7));
  const [toD, setToD] = useState(todayStr());
+ /* v19: aktivitás/hőség profilok — visszatekintő elemzés időszaka (napban), állítható */
+ const [actAnalysisDays, setActAnalysisDays] = useState(30);
+ const actAnalysis = useMemo(() => activityProfileAnalysis(entries, actAnalysisDays), [entries, actAnalysisDays]);
  const iob = useMemo(() => calcIOB(entries, settings && settings.diaHours), [entries, settings]);
  const patR = useRef(null);
  const patC = useRef(null);
@@ -6102,6 +6207,63 @@ function Statistics({
      className: 'text-xs text-indigo-700 mt-1'
     }, `${meals.length} étkezés alapján: átlag ${avgC.toFixed(1)}g CH/étk, ${avgI.toFixed(1)}E ${(settings&&settings.rapidName)||'Humalog'} → 1E ≈ ${ratio}g CH. ⚠️ Orvossal egyeztess!`)
    )
+  ]),
+
+  /* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — VISSZATEKINTŐ ELEMZÉS ═══
+     Csak TÁJÉKOZTATÓ jellegű — semmit nem ír át automatikusan; a %-ok
+     módosítása mindig a felhasználó saját döntése a Beállításokban. */
+  (settings && settings.featActivityProfiles !== false) && card([
+   h('h3', {
+    className: 'font-black text-teal-700 mb-1'
+   }, '🌡️ ' + window.t('Aktivitás/hőség profilok — visszatekintő elemzés')),
+   h('div', {
+     className: 'flex items-center gap-2 mb-3'
+    },
+    h('label', {
+     className: 'text-xs font-bold text-gray-500'
+    }, window.t('Vizsgált időszak') + ':'),
+    h('input', {
+     type: 'number',
+     min: 7,
+     max: 365,
+     step: 1,
+     value: actAnalysisDays,
+     onChange: e => setActAnalysisDays(Math.max(7, parseInt(e.target.value) || 30)),
+     className: 'w-20 border-2 border-teal-200 rounded-xl px-2 py-1 text-sm focus:outline-none'
+    }),
+    h('span', {
+     className: 'text-xs text-gray-400'
+    }, window.t('nap'))
+   ),
+   actAnalysis.length === 0 ? h('p', {
+    className: 'text-xs text-gray-400'
+   }, window.t('Még nincs elég adat: jelölj meg profilt egy-két Étkezés bejegyzésnél a bólus-kalkulátornál, majd térj vissza ide.')) :
+   h('div', {
+     className: 'space-y-2'
+    },
+    actAnalysis.map(g => h('div', {
+      key: g.id,
+      className: 'p-3 rounded-xl border-2 border-teal-200 bg-teal-50/40'
+     },
+     h('p', {
+      className: 'text-sm font-black text-teal-800'
+     }, g.name + ` (${g.n} ${window.t('alkalom')}, átlag ${g.avgPct > 0 ? '+' : ''}${g.avgPct.toFixed(0)}%)`),
+     h('p', {
+      className: 'text-xs text-teal-700 mt-1'
+     }, window.t('Átlagos vércukor-elmozdulás a mérés után') + `: ${g.avgDelta > 0 ? '+' : ''}${g.avgDelta.toFixed(1)} ${window.bgU.label()}`),
+     g.n < 3 ? h('p', {
+      className: 'text-xs text-gray-400 mt-1'
+     }, window.t('Még kevés adat (n<3) — egyelőre nem eléggé megbízható.')) :
+     h('p', {
+      className: 'text-xs font-bold mt-1 ' + (g.avgDelta > 1.5 ? 'text-red-600' : g.avgDelta < -1.5 ? 'text-amber-600' : 'text-green-600')
+     }, g.avgDelta > 1.5 ? '💡 ' + window.t('Talán nagyobb csökkentés indokolt ennél a profilnál.') :
+      g.avgDelta < -1.5 ? '💡 ' + window.t('Talán kisebb csökkentés is elég ennél a profilnál.') :
+      '✓ ' + window.t('A jelenlegi beállítás megfelelőnek tűnik.'))
+    ))
+   ),
+   h('p', {
+    className: 'text-xs text-gray-400 mt-3'
+   }, '⚠️ ' + window.t('Csak tájékoztató jellegű, nem orvosi javaslat — a %-ok módosítása mindig a te döntésed. Orvossal egyeztess!'))
   ]),
 
   /* v8: nyomtatható orvosi riport, szabad "-tól -ig" dátumtartománnyal */
@@ -6777,13 +6939,24 @@ function AddEntry({
   activityTo: null, /* v18.6: pontos befejezés (ha felülírva) */
   activityLevel: 0,
   private: false,
-  fatProt: false /* v18 (6.3): zsíros/fehérjedús étel jelölés */
+  fatProt: false, /* v18 (6.3): zsíros/fehérjedús étel jelölés */
+  /* v19: aktivitás/hőség profil — melyik lett kiválasztva + a mentéskor ténylegesen
+     alkalmazott %, hőmérséklet és annak forrása (a profil utólagos szerkesztése/törlése
+     ne módosítsa visszamenőleg a már elmentett bejegyzéseket) */
+  activityProfileId: '',
+  activityProfileName: '',
+  activityProfilePct: null,
+  weatherTemp: '',
+  weatherSource: null
  });
  const [showPicker, setShowPicker] = useState(false);
  const [fSearch, setFSearch] = useState('');
  const [nfName, setNfName] = useState('');
  const [nfCarbs, setNfCarbs] = useState('');
  const [nfUnit, setNfUnit] = useState('');
+ /* v19: aktivitás/hőség profil — időjárás-lekérdezés folyamatjelzés/hibaüzenet */
+ const [weatherBusy, setWeatherBusy] = useState(false);
+ const [weatherErr, setWeatherErr] = useState('');
 
  const shownFoods = allFoods.filter(f => f.name.toLowerCase().includes(fSearch.toLowerCase()));
  /* v18 (6.1): beépített magyar CH-táblázat — v18.2: kategória-gombokkal is böngészhető */
@@ -6856,7 +7029,18 @@ function AddEntry({
  const bgCorr = curBG > 0 ? ((curBG - tgt) / sens) : 0;
  const bolusBase = totalCH > 0 ? (totalCH / ratio) : 0;
  const iobNow = calcIOB(entries, settings && settings.diaHours);
- const sugInsRaw = Math.max(0, bolusBase + bgCorr - iobNow);
+ /* v19: aktivitás/hőség profil — a napszaknak megfelelő %-os csökkentés a
+    CH-rész + BG-korrekció összegére hat (az IOB ezután, változatlanul levonva,
+    hiszen az aktivitástól függetlenül már a szervezetben van). */
+ const actProfilesOn = !settings || settings.featActivityProfiles !== false;
+ const actProfiles = (actProfilesOn && Array.isArray(settings && settings.activityProfiles) && settings.activityProfiles.length) ?
+  settings.activityProfiles : (actProfilesOn ? ACTIVITY_PROFILE_DEFAULTS : []);
+ const actProfile = actProfilesOn ? actProfiles.find(p => p.id === form.activityProfileId) : null;
+ const actDaypartKey = actProfileDaypartKey(form.timestamp, settings);
+ const actPct = actProfile ? (parseFloat(actProfile[actDaypartKey]) || 0) : 0;
+ const bolusNeed = bolusBase + bgCorr;
+ const bolusNeedAdj = actPct ? bolusNeed * (1 + actPct / 100) : bolusNeed;
+ const sugInsRaw = Math.max(0, bolusNeedAdj - iobNow);
  const sugIns = totalCH > 0 ? (Math.round(sugInsRaw * 2) / 2).toFixed(1) : '0';
  const corrSign = bgCorr > 0 ? '+' : '';
  const corrAbs = Math.abs(bgCorr).toFixed(1);
@@ -6906,7 +7090,15 @@ function AddEntry({
    activityFrom: (_hasAct && form.activityFrom) ? form.activityFrom : null,
    activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
-   private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
+   private: _isAct ? !!form.private : false, /* v14: privát CSAK Egyéb tevékenységnél */
+   /* v19: aktivitás/hőség profil — csak a CH-alapú bólusnál értelmezett; a
+      ténylegesen alkalmazott % MENTÉSKOR rögzül (a profil későbbi szerkesztése/
+      törlése a már mentett bejegyzést nem módosítja visszamenőleg). */
+   activityProfileId: (_hasCH && totalCH > 0 && form.activityProfileId) ? form.activityProfileId : '',
+   activityProfileName: (_hasCH && totalCH > 0 && form.activityProfileId && actProfile) ? actProfile.name : '',
+   activityProfilePct: (_hasCH && totalCH > 0 && form.activityProfileId) ? actPct : null,
+   weatherTemp: (_hasCH && totalCH > 0 && form.weatherTemp !== '') ? parseFloat(form.weatherTemp) : null,
+   weatherSource: (_hasCH && totalCH > 0 && form.weatherTemp !== '') ? (form.weatherSource || 'manual') : null
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
   const warn = extremeBGWarn(_mmol);
@@ -7294,6 +7486,52 @@ function AddEntry({
       className: 'text-xs ml-2 text-purple-600'
      }, `IOB: −${iobNow.toFixed(1)}E`)
     ),
+    /* ═══ v19: AKTIVITÁS/HŐSÉG PROFIL — opcionális, csak a CH-alapú bólusnál ═══ */
+    actProfilesOn && actProfiles.length > 0 && h('div', {
+      className: 'mb-2 p-2 bg-white/70 rounded-xl border border-purple-200'
+     },
+     h('label', {
+       className: 'text-xs font-bold text-purple-700 block mb-1'
+      }, '🌡️ ' + window.t('Aktivitás/hőség profil (opcionális)')),
+     h('select', {
+       value: form.activityProfileId || '',
+       onChange: e => setForm(p => ({ ...p, activityProfileId: e.target.value })),
+       className: 'w-full border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400 mb-2'
+      },
+      h('option', { value: '' }, window.t('Nincs (alap)')),
+      actProfiles.map(pf => h('option', { key: pf.id, value: pf.id }, pf.name))
+     ),
+     h('div', { className: 'flex items-center gap-2' },
+      h('input', {
+       type: 'number',
+       step: '0.1',
+       value: form.weatherTemp,
+       placeholder: '°C',
+       onChange: e => setForm(p => ({ ...p, weatherTemp: e.target.value, weatherSource: 'manual' })),
+       className: 'w-24 border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400'
+      }),
+      h('button', {
+       type: 'button',
+       disabled: weatherBusy,
+       onClick: () => {
+        setWeatherErr('');
+        setWeatherBusy(true);
+        fetchDeviceWeather(
+         temp => { setWeatherBusy(false); setForm(p => ({ ...p, weatherTemp: String(temp), weatherSource: 'auto' })); },
+         msg => { setWeatherBusy(false); setWeatherErr(msg); }
+        );
+       },
+       className: 'text-xs font-bold px-2 py-1.5 rounded-xl bg-purple-100 text-purple-700 disabled:opacity-50'
+      }, weatherBusy ? '⏳ ' + window.t('Lekérdezés…') : '📍 ' + window.t('Lekérdezés'))
+     ),
+     weatherErr && h('p', { className: 'text-xs text-red-500 mt-1' }, '⚠️ ' + window.t(weatherErr)),
+     actProfile && actPct !== 0 && h('p', {
+      className: 'text-xs font-bold text-purple-700 mt-2'
+     }, `${actPct > 0 ? '+' : ''}${actPct}% ${window.t('korrigálva')}: ${actProfile.name}` + (form.weatherTemp !== '' ? ` (${form.weatherTemp}°C)` : '')),
+     actProfile && actProfile.extraCH && h('p', {
+      className: 'text-xs text-amber-700 mt-1 p-2 bg-amber-50 rounded-xl border border-amber-200'
+     }, '🍭 ' + window.t('Javasolt extra CH') + ': ' + actProfile.extraCH)
+    ),
     h('p', {
       className: 'text-lg font-black text-purple-900 mb-2'
      },
@@ -7535,6 +7773,10 @@ function ViewEntryModal({
      entry.activity && row('🏃', 'Tevékenység', entry.activity),
      entry.activityDur > 0 && row('⏱️', 'Időtartam', fmtDur(entry.activityDur) + (actRangeLbl(entry) ? ' (' + actRangeLbl(entry) + ')' : '')),
      entry.activityLevel > 0 && row('⚡', 'Fizikai aktivitás', entry.activityLevel + '/5 – ' + actLevelName(settings, entry.activityLevel)),
+     /* v19: aktivitás/hőség profil — a mentéskor rögzített név/%/hőmérséklet */
+     entry.activityProfileId && entry.activityProfilePct && row('🌡️', 'Aktivitás/hőség profil',
+      entry.activityProfileName + ' (' + (entry.activityProfilePct > 0 ? '+' : '') + entry.activityProfilePct + '%)' +
+      (entry.weatherTemp != null && entry.weatherTemp !== '' ? ' · ' + entry.weatherTemp + '°C' : '')),
      entry.notes && h('div', {
        className: 'py-2'
       },
@@ -9017,6 +9259,46 @@ const STREAK_DEFAULTS = {
  msg: '✨ Csodás! Az univerzum is veled tart — őrizd ezt a szép áramlást!'
 };
 
+/* v19: aktivitás/hőség profilok — kiinduló, Zoltán saját példái alapján megadott
+   preset-lista, teljesen szabadon szerkeszthető/bővíthető/törölhető a Beállításokban.
+   morningPct/noonPct/eveningPct: a bólusjavaslat (sugIns) csökkentése %-ban a meglévő
+   reggel/délben/este (ib1/ib2) napszakoknak megfelelően. extraCH: szabad szöveges
+   emlékeztető (mennyiséggel együtt), nem kerül automatikusan összeadásra. */
+const ACTIVITY_PROFILE_DEFAULTS = [
+ {
+  id: 'ap-alap',
+  name: 'Alap (nincs korrekció)',
+  morningPct: 0,
+  noonPct: 0,
+  eveningPct: 0,
+  extraCH: ''
+ },
+ {
+  id: 'ap-konnyu-hazimunka',
+  name: 'Könnyű házimunka (pl. takarítás, autómosás)',
+  morningPct: -20,
+  noonPct: -20,
+  eveningPct: -20,
+  extraCH: ''
+ },
+ {
+  id: 'ap-kerti-enyhe',
+  name: 'Kerti munka – enyhén meleg',
+  morningPct: -20,
+  noonPct: -50,
+  eveningPct: -50,
+  extraCH: 'Szőlőcukor 2-3 db / kb. 10-15g CH'
+ },
+ {
+  id: 'ap-kerti-extrem',
+  name: 'Kerti munka – extrém meleg',
+  morningPct: -20,
+  noonPct: -70,
+  eveningPct: -50,
+  extraCH: 'Fanta/üdítő 2 dl / kb. 20g CH'
+ }
+];
+
 const DEFAULT_SETTINGS = {
  lowBG: 3.9,
  highBG: 10.0,
@@ -9053,6 +9335,10 @@ const DEFAULT_SETTINGS = {
  sosNote: '',
  /* v14: fizikai aktivitás szintek (1–5) — a felhasználó által elnevezhető */
  actLevels: ['Nagyon könnyű', 'Könnyű', 'Közepes', 'Megerőltető', 'Nagyon megerőltető'],
+ /* v19: aktivitás/hőség profilok — bólusjavaslat napszakonkénti %-os korrekciójához.
+    Minden profil: név + reggel/délben/este bólus-csökkentés (%) + szabad szöveges
+    "javasolt extra CH" emlékeztető. A felhasználó szabadon bővíti/törli/szerkeszti. */
+ activityProfiles: ACTIVITY_PROFILE_DEFAULTS.slice(),
  /* v17: bázisinzulin-emlékeztető — beadási időpont + mennyivel előtte jelenjen meg */
  basalRemindOn: true,
  basalRemindTime: '22:00',
@@ -9074,7 +9360,8 @@ const DEFAULT_SETTINGS = {
  mealRemindMin: 100,  /* étkezés utáni emlékeztető (perc) */
  featSearch: true,    /* keresés a naplóban */
  featBigFont: false,  /* nagy betűs mód (megjelenítési opció — alapból ki) */
- featWeekly: true     /* heti összefoglaló a követőnek */
+ featWeekly: true,    /* heti összefoglaló a követőnek */
+ featActivityProfiles: true /* v19: aktivitás/hőség profilok — bólusjavaslat korrekciója */
 };
 
 /* v8: extrém vércukorérték-ellenőrzés (mmol/l-ben) — elgépelés-védelem */
@@ -9578,11 +9865,11 @@ function Settings({
     className: 'text-xs font-bold text-indigo-500 underline mt-2'
    }, '↩️ ' + t('Alapfeliratok visszaállítása'))
   ]),
-  /* ═══ v18: ÚJ SZOLGÁLTATÁSOK KAPCSOLÓI — alapból mind BEkapcsolva ═══ */
+  /* ═══ v18/v19: ÚJ SZOLGÁLTATÁSOK KAPCSOLÓI — alapból mind BEkapcsolva ═══ */
   card([
    h('h2', {
     className: 'font-black text-indigo-700 mb-1'
-   }, '🧩 ' + t('Új szolgáltatások (v18)')),
+   }, '🧩 ' + t('Új szolgáltatások (v19)')),
    h('p', {
     className: 'text-sm text-gray-500 mb-3'
    }, t('Minden új szolgáltatás külön ki-be kapcsolható. Alapállapotban mind be van kapcsolva.')),
@@ -9636,6 +9923,12 @@ function Settings({
       icon: '📬',
       label: t('Heti összefoglaló a követőnek'),
       desc: t('A követő készülékén hetente egyszer rövid összesítő: TIR, átlag, hipók száma.')
+     },
+     {
+      k: 'featActivityProfiles',
+      icon: '🌡️',
+      label: t('Aktivitás/hőség profilok'),
+      desc: t('Szerkeszthető profilok (pl. kerti munka, meleg idő) a bólusjavaslat napszakonkénti %-os csökkentéséhez + extra CH emlékeztetőhöz. Beállítás: lentebb, külön kártyán.')
      }
     ].map(o => h('div', {
       key: o.k,
@@ -10122,6 +10415,96 @@ function Settings({
     }),
     className: 'mt-3 text-xs font-bold text-indigo-500 underline'
    }, '↩️ ' + t('Alapértelmezett elnevezések visszaállítása'))
+  ]),
+  /* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — szabadon szerkeszthető preset-lista ═══
+     Minden profil: név + reggel/délben/este bólus-csökkentés (%) + szabad
+     szöveges "javasolt extra CH" emlékeztető. Alkalmazás: Új bejegyzésnél, a
+     bólus-kalkulátor kártyán (opcionális választó). */
+  card([
+   h('h2', {
+    className: 'font-black text-teal-700 mb-1'
+   }, '🌡️ ' + t('Aktivitás/hőség profilok')),
+   h('p', {
+    className: 'text-xs text-gray-500 mb-3'
+   }, t('Saját preset-ek (pl. kerti munka, meleg idő) az Új bejegyzés bólus-javaslatának napszakonkénti %-os csökkentéséhez. A negatív érték csökkenti, a pozitív növeli a javasolt adagot. Az „extra CH” szabad szöveg, csak emlékeztető — nem kerül automatikusan összeadásra.')),
+   h('div', {
+     className: 'space-y-3'
+    },
+    (Array.isArray(s.activityProfiles) && s.activityProfiles.length ? s.activityProfiles : ACTIVITY_PROFILE_DEFAULTS).map((pf, i) => {
+     const list = Array.isArray(s.activityProfiles) && s.activityProfiles.length ? s.activityProfiles : ACTIVITY_PROFILE_DEFAULTS;
+     const updatePf = patch => {
+      const arr = list.slice();
+      arr[i] = { ...arr[i], ...patch };
+      setS({ ...s, activityProfiles: arr });
+     };
+     const pctField = (key, label) => h('div', null,
+      h('label', { className: 'text-xs font-bold text-teal-700 block mb-1' }, label),
+      h('input', {
+       type: 'number',
+       step: 5,
+       value: pf[key] != null ? pf[key] : 0,
+       onChange: e => updatePf({ [key]: parseInt(e.target.value) || 0 }),
+       className: 'w-full border-2 border-teal-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-teal-400'
+      }));
+     return h('div', {
+       key: pf.id || i,
+       className: 'p-3 rounded-xl border-2 border-teal-200 bg-teal-50/40'
+      },
+      h('div', { className: 'flex items-center gap-2 mb-2' },
+       h('input', {
+        type: 'text',
+        value: pf.name || '',
+        placeholder: t('Profil neve'),
+        onChange: e => updatePf({ name: e.target.value }),
+        className: 'flex-1 border-2 border-teal-200 rounded-xl px-2 py-1.5 text-sm font-bold focus:outline-none focus:border-teal-400'
+       }),
+       h('button', {
+        type: 'button',
+        title: t('Törlés'),
+        onClick: () => setS({ ...s, activityProfiles: list.filter((_, j) => j !== i) }),
+        className: 'text-red-500 hover:text-red-700 px-2 py-1.5 rounded-xl border-2 border-red-200 text-sm font-bold shrink-0'
+       }, '🗑️')
+      ),
+      h('div', { className: 'grid grid-cols-3 gap-2 mb-2' },
+       pctField('morningPct', '🌅 ' + t('Reggel') + ' %'),
+       pctField('noonPct', '☀️ ' + t('Délben') + ' %'),
+       pctField('eveningPct', '🌙 ' + t('Este') + ' %')
+      ),
+      h('input', {
+       type: 'text',
+       value: pf.extraCH || '',
+       placeholder: t('Javasolt extra CH (pl. „Szőlőcukor 2 db / 10g CH”)'),
+       onChange: e => updatePf({ extraCH: e.target.value }),
+       className: 'w-full border-2 border-teal-200 rounded-xl px-2 py-1.5 text-xs focus:outline-none focus:border-teal-400'
+      })
+     );
+    })
+   ),
+   h('div', { className: 'flex gap-3 mt-3' },
+    h('button', {
+     type: 'button',
+     onClick: () => {
+      const list = Array.isArray(s.activityProfiles) && s.activityProfiles.length ? s.activityProfiles : ACTIVITY_PROFILE_DEFAULTS;
+      setS({
+       ...s,
+       activityProfiles: [...list, {
+        id: 'ap-custom-' + Date.now(),
+        name: t('Új profil'),
+        morningPct: 0,
+        noonPct: 0,
+        eveningPct: 0,
+        extraCH: ''
+       }]
+      });
+     },
+     className: 'text-xs font-bold text-teal-600 underline'
+    }, '➕ ' + t('Új profil hozzáadása')),
+    h('button', {
+     type: 'button',
+     onClick: () => setS({ ...s, activityProfiles: ACTIVITY_PROFILE_DEFAULTS.slice() }),
+     className: 'text-xs font-bold text-indigo-500 underline'
+    }, '↩️ ' + t('Alapértelmezett profilok visszaállítása'))
+   )
   ]),
   /* v10.1: HASZNÁLATI ÚTMUTATÓ — magyar és angol PDF kézikönyv megnyitása/letöltése.
      Új lapon nyílik (asztalin böngésző PDF-néző, telefonon rendszer-megjelenítő);
@@ -10938,6 +11321,9 @@ function App() {
     /* v14: követő módban a szem ikon a csak-olvasó részletnézetet nyitja */
     onEdit: followerMode ? setViewingEntry : setEditingEntry,
     onDelete: followerMode ? () => {} : deleteEntry,
+    /* v19.1: Tulajdonos módban is elérhető külön "szem" gomb — ugyanaz a
+       csak-olvasó nézet, amit a Követő is lát; a szerkesztés (ceruza) marad. */
+    onView: followerMode ? null : setViewingEntry,
     settings: effSettings,
     onAdd: followerMode ? null : () => setView('add'),
     /* v15: a Legutóbbi vércukor kártya megjegyzése a bejegyzés notes mezőjébe mentődik;
@@ -10965,6 +11351,8 @@ function App() {
     entries: effEntries,
     onEdit: followerMode ? setViewingEntry : setEditingEntry,
     onDelete: followerMode ? () => {} : deleteEntry,
+    /* v19.1: Tulajdonos módban is elérhető külön "szem" gomb (lásd Dashboard) */
+    onView: followerMode ? null : setViewingEntry,
     settings: effSettings
    }),
    view === 'stats' && h(Statistics, {
@@ -11064,7 +11452,8 @@ function App() {
    allFoods,
    entries
   }),
-  /* v14: követő részletnézet — szem ikonra nyílik, csak olvasható */
+  /* v14: követő részletnézet — szem ikonra nyílik, csak olvasható.
+     v19.1: mostantól Tulajdonos módban is elérhető (ugyanaz a modal). */
   viewingEntry && h(ViewEntryModal, {
    entry: viewingEntry,
    onClose: () => setViewingEntry(null),

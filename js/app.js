@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '18.7';
+const APP_VERSION = '18.8';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3802,9 +3802,10 @@ function EntryCard({
  onDelete,
  showDate,
  settings,
- emphasize /* v18.7 (feladat 5): CSAK az Áttekintés "Mai bejegyzések" kártyáin igaz —
-   asztali nézetben dátum/idő balra, Típus+badge-ek jobbra kerülnek, a szöveg nagyobb/
-   erősebb kontrasztú. A Bejegyzések/Napló oldal listája (emphasize nélkül) változatlan. */
+ emphasize /* v18.7 (feladat 5), v18.8 (feladat 1): CSAK az Áttekintés "Mai bejegyzések"
+   kártyáin igaz — a Típus alatt saját sorban, balra igazítva jelenik meg a dátum/idő
+   (mobilon és asztalin egyaránt), a szöveg nagyobb/erősebb kontrasztú. A Bejegyzések/
+   Napló oldal listája (emphasize nélkül) változatlan. */
 }) {
  /* v14: követő módban a kártya csak-olvasó — szem ikon, nincs törlés */
  const _ro = window.HBC_SYNC && window.HBC_SYNC.cfg.mode === 'follower';
@@ -3831,10 +3832,11 @@ function EntryCard({
  } : bg && bg > _high ? {
   borderLeft: '4px solid #ef4444'
  } : {};
- /* v18.7 (feladat 5): a tartalom darabjait egyszer építjük fel, majd
-    emphasize esetén CSS Grid-es (hbc-entry-grid) szerkezetbe, egyébként a
-    régi, változatlan flex-szerkezetbe rendezzük — így a Bejegyzések/Napló
-    oldal (emphasize nélkül) pixelre ugyanaz marad, mint eddig. */
+ /* v18.7 (feladat 5), v18.8 (feladat 1): a tartalom darabjait egyszer építjük
+    fel, majd emphasize esetén egy egyszerű, függőlegesen egymás alatti
+    szerkezetbe (Típus / dátum / badge-ek / jegyzet), egyébként a régi,
+    változatlan flex-szerkezetbe rendezzük — így a Bejegyzések/Napló oldal
+    (emphasize nélkül) pixelre ugyanaz marad, mint eddig. */
  const typeRow = h(Fragment, null,
   h('span', {
    className: emphasize ? 'font-black text-gray-800 hbc-entry-typelabel' : 'font-black text-gray-800 text-sm'
@@ -3892,22 +3894,24 @@ function EntryCard({
  const notesNode = entry.notes && h('p', {
   className: 'mt-1 text-xs text-gray-500 italic truncate'
  }, '"' + entry.notes + '"');
+ /* v18.8 (feladat 1): a korábbi, asztalin külön oszlopos (grid) elrendezés
+    helyett EGYSÉGES, függőleges elrendezés — mobilon és asztalin egyaránt:
+    Típus, alatta (saját sorban, balra igazítva) a dátum/idő, majd a többi
+    adat-címke, majd a jegyzet. Több magasságot foglal, de olvashatóbb. */
  const contentBlock = emphasize ?
   h('div', {
-    className: 'hbc-entry-grid flex-1 min-w-0'
+    className: 'flex-1 min-w-0'
    },
    h('div', {
-    className: 'hbc-entry-type'
-   }, typeRow),
+     className: 'flex items-center gap-2 flex-wrap mb-1'
+    }, typeRow),
    h('div', {
-    className: 'hbc-entry-date'
-   }, dateNode),
+     className: 'mb-1.5'
+    }, dateNode),
    h('div', {
-    className: 'hbc-entry-badges flex flex-wrap gap-1.5'
-   }, badgeItems),
-   notesNode && h('div', {
-    className: 'hbc-entry-notes'
-   }, notesNode)
+     className: 'hbc-entry-badges flex flex-wrap gap-1.5'
+    }, badgeItems),
+   notesNode
   ) :
   h('div', {
     className: 'flex-1 min-w-0'
@@ -7320,13 +7324,14 @@ function AddEntry({
     h('button', {
      type: 'button',
      onClick: () => {
-      showConfirm ? showConfirm(`Alkalmazzuk a javasolt ${sugIns}E ${rapidN} adagot?`, () => setForm({
-       ...form,
-       insulinRapid: sugIns
-      })) : setForm({
-       ...form,
-       insulinRapid: sugIns
+      /* v18.8 (feladat 2): a javaslat elfogadása is "beírásnak" számít —
+         ugyanúgy rögzíti a beadás akkori időpontját */
+      const _applyIns = p => ({
+       ...p,
+       insulinRapid: sugIns,
+       insulinRapidTime: p.insulinRapidTime || p.timestamp
       });
+      showConfirm ? showConfirm(`Alkalmazzuk a javasolt ${sugIns}E ${rapidN} adagot?`, () => setForm(_applyIns)) : setForm(_applyIns);
      },
      className: 'mt-1 w-full bg-purple-600 text-white rounded-xl py-2.5 text-sm font-bold'
     }, '✨ Javaslat alkalmazása'),
@@ -7347,10 +7352,15 @@ function AddEntry({
       type: 'number',
       step: '0.5',
       value: form.insulinRapid,
-      onChange: e => setForm({
-       ...form,
-       insulinRapid: e.target.value
-      }),
+      onChange: e => setForm(p => ({
+       ...p,
+       insulinRapid: e.target.value,
+       /* v18.8 (feladat 2): a beadás saját időpontja — első beíráskor a
+          bejegyzés AKKORI fő időpontja rögzül, így ha a fő időpont később
+          (pl. étkezésnél a legkorábbi ételtétel miatt) elmozdul, a beadás
+          ideje változatlan, korrekt marad — a vércukor-méréssel azonos módon */
+       insulinRapidTime: e.target.value ? (p.insulinRapidTime || p.timestamp) : ''
+      })),
       placeholder: 'pl. 4',
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      }),
@@ -7370,10 +7380,12 @@ function AddEntry({
       type: 'number',
       step: '0.5',
       value: form.insulinLong,
-      onChange: e => setForm({
-       ...form,
-       insulinLong: e.target.value
-      }),
+      onChange: e => setForm(p => ({
+       ...p,
+       insulinLong: e.target.value,
+       /* v18.8 (feladat 2): l. insulinRapidTime fenti megjegyzését */
+       insulinLongTime: e.target.value ? (p.insulinLongTime || p.timestamp) : ''
+      })),
       placeholder: 'pl. 10',
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      }),
@@ -7992,10 +8004,12 @@ function EditModal({
        type: 'number',
        step: '0.5',
        value: form.insulinRapid || '',
-       onChange: e => setForm({
-        ...form,
-        insulinRapid: e.target.value
-       }),
+       onChange: e => setForm(p => ({
+        ...p,
+        insulinRapid: e.target.value,
+        /* v18.8 (feladat 2): a beadás saját időpontja — l. AddEntry azonos megjegyzését */
+        insulinRapidTime: e.target.value ? (p.insulinRapidTime || p.timestamp) : ''
+       })),
        className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
       }),
       /* v12.3: külön beadási idő */
@@ -8014,10 +8028,12 @@ function EditModal({
        type: 'number',
        step: '0.5',
        value: form.insulinLong || '',
-       onChange: e => setForm({
-        ...form,
-        insulinLong: e.target.value
-       }),
+       onChange: e => setForm(p => ({
+        ...p,
+        insulinLong: e.target.value,
+        /* v18.8 (feladat 2): l. insulinRapidTime fenti megjegyzését */
+        insulinLongTime: e.target.value ? (p.insulinLongTime || p.timestamp) : ''
+       })),
        className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
       }),
       form.insulinLong && h(InsTimeField, {

@@ -255,23 +255,15 @@ html.hbc-bigfont .text-\[10px\],html.hbc-bigfont .text-\[11px\]{font-size:.75rem
 .hbc-fooditem-name p{overflow-wrap:break-word;word-break:break-word}
 .hbc-fooditem-ctrls{display:flex;align-items:center;gap:.25rem;flex-shrink:0}
 
-/* ═══════════ v18.7 FIX (feladat 5) — "MAI BEJEGYZÉSEK" KÁRTYÁK ═══════════
-   CSAK az Áttekintés "Mai bejegyzések" kártyáit érinti (hbc-entry-grid class,
-   az EntryCard emphasize=true módban kapja) — a Bejegyzések/Napló oldal
-   listája (emphasize nélkül) változatlan marad.
-   Mobilon a mai elrendezés (Típus+dátum egy sorban, alatta a badge-ek) marad,
-   csak a betűméret nő és a kontraszt erősödik. Asztali (768px+) nézetben a
-   dátum/idő blokk önálló bal oszlopba kerül, jobbra a Típus+badge-ek+jegyzet. */
-.hbc-entry-grid{display:grid;grid-template-columns:1fr auto;grid-template-areas:"type date" "badges badges" "notes notes";column-gap:.5rem;row-gap:.3rem}
-.hbc-entry-type{grid-area:type;min-width:0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
-.hbc-entry-date{grid-area:date;justify-self:end;align-self:start}
-.hbc-entry-badges{grid-area:badges}
-.hbc-entry-notes{grid-area:notes}
-@media(min-width:768px){
-  .hbc-entry-grid{grid-template-columns:minmax(110px,auto) 1fr;grid-template-areas:"date type" "date badges" "date notes";column-gap:1.25rem}
-  .hbc-entry-date{justify-self:start;align-self:start;text-align:left}
-}
-/* +2pt betűméret és erősebb kontraszt — asztali ÉS mobil nézetben egyaránt */
+/* ═══════════ v18.7 (feladat 5) / v18.8 FIX (feladat 1) — "MAI BEJEGYZÉSEK" KÁRTYÁK ═══════════
+   CSAK az Áttekintés "Mai bejegyzések" kártyáit érinti (az EntryCard
+   emphasize=true módban kapja ezeket az osztályokat) — a Bejegyzések/Napló
+   oldal listája (emphasize nélkül) változatlan marad.
+   v18.8: a korábbi, asztalin külön oszlopos (CSS Grid) elrendezés helyett
+   egyszerű, függőlegesen egymás alatti szerkezet — mobilon és asztalin
+   egyaránt: Típus, alatta (saját sorban, balra igazítva) a dátum/idő, majd
+   a többi adat-címke, majd a jegyzet. A rétegezést maga a JSX (EntryCard)
+   végzi, itt csak a betűméret/kontraszt-erősítés maradt. */
 .hbc-entry-typelabel{font-size:.9375rem!important}
 .hbc-entry-datetext{font-size:.875rem!important;color:#6b7280!important;font-weight:800!important}
 .hbc-entry-badges .hbc-badge{font-size:.875rem!important}

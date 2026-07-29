@@ -8,6 +8,26 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v18.8 finomítás (2026. július 29.)
+
+- **📅 "Mai bejegyzések" — egyszerűsített elrendezés:** a v18.7-ben bevezetett,
+  asztalin külön oszlopos (Típus+adatok jobbra, dátum/idő balra) elrendezés
+  helyett mostantól egységes, függőleges elrendezés — mobilon és asztalin
+  egyaránt: Típus, alatta (saját sorban, balra igazítva) a dátum/idő, majd a
+  többi adat-címke (vércukor, CH, inzulin, tevékenység), majd a jegyzet. Több
+  magasságot foglal, de olvashatóbb.
+- **⏰ Inzulin beadási idő — véglegesen rögzítve az étkezés-időpont mögött:**
+  a v18.7-es "Étkezésnél a legkorábbi ételtétel-időponthoz igazodó fő
+  időpont" finomítva — eddig csak a vércukor mérési ideje maradt változatlan
+  a fő időpont esetleges elmozdulásakor, az inzulin (Humalog/Lantus) beadási
+  ideje nem. Mostantól az inzulin adag beírásakor (vagy a bólusjavaslat
+  elfogadásakor) is rögzül az akkori időpont, és az a fő időpont későbbi
+  elmozdulásától függetlenül változatlan marad — pl. 6:30-kor mért vércukor
+  és beadott inzulin, majd 7:30-kor kezdett étkezés esetén a bejegyzés ideje
+  7:30-ra vált, de a mérés és a beadás ideje (6:30) nem.
+- **🧹 Kódtisztítás:** a v18.7-es "Mai bejegyzések" grid-elrendezéshez tartozó,
+  most feleslegessé vált CSS-szabályok eltávolítva.
+
 ## v18.7 javítás és bővítés (2026. július 28.)
 
 - **📱 "Bejegyzés szerkesztése" — hosszú ételnév tördelése:** a bejegyzéshez

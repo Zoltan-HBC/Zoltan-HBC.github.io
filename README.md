@@ -8,6 +8,17 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v19.2 kiegészítés (2026. július 29.)
+
+- **⏱️ "Egyéb tevékenység" kártya — -tól-ig a dátumsorban:** ha egy bejegyzés
+  kizárólag "Egyéb tevékenység" (nincs rajta vércukor és inzulin sem), a kártya
+  dátum/idő sora a bejegyzés időpontja helyett a tevékenység teljes -tól-ig
+  időtartamát mutatja (pl. "2026. júl. 29. – 08:30–12:30"), a tevékenység kis
+  csempéjén pedig csak az össz-időtartam marad (pl. "4 ó"), hogy az információ
+  ne ismétlődjön kétszer. Ha a bejegyzésen más adat (vércukor, inzulin) is
+  szerepel, minden a megszokott módon marad: a dátumsor a bejegyzés időpontját
+  mutatja, a -tól-ig a tevékenység-csempén, zárójelben látszik.
+
 ## v19.1 kiegészítés (2026. július 29.)
 
 - **👁️ "Szem" nézet Tulajdonos módban is:** az "Áttekintés" oldal "Mai bejegyzések"

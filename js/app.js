@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '19.1';
+const APP_VERSION = '19.2';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3617,6 +3617,16 @@ function fmtAlwaysDT(ts) {
  const M = ['jan.', 'feb.', 'már.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szep.', 'okt.', 'nov.', 'dec.'];
  /* v9: a hónapnév a kiválasztott nyelven jelenik meg */
  return d[0] + '. ' + window.t(M[parseInt(d[1]) - 1]) + ' ' + parseInt(d[2]) + '. – ' + (ts.length >= 16 ? ts.slice(11, 16) : '');
+}
+
+/* v19.2: csak a dátum-rész (idő nélkül) — a "tiszta" (vércukor/inzulin nélküli)
+   "Egyéb tevékenység" bejegyzések kártyáján a dátum mellé nem a bejegyzés
+   időpontja, hanem a tevékenység teljes -tól-ig időtartama kerül. */
+function fmtDatePrefix(ts) {
+ if (!ts) return '';
+ const d = ts.slice(0, 10).split('-');
+ const M = ['jan.', 'feb.', 'már.', 'ápr.', 'máj.', 'jún.', 'júl.', 'aug.', 'szep.', 'okt.', 'nov.', 'dec.'];
+ return d[0] + '. ' + window.t(M[parseInt(d[1]) - 1]) + ' ' + parseInt(d[2]) + '.';
 }
 
 function sortedByTS(arr) {
@@ -3923,9 +3933,17 @@ function EntryCard({
    className: `hbc-badge text-xs font-bold px-2 py-0.5 rounded-full ${mealC[entry.mealType]||'bg-gray-100 text-gray-600'}`
   }, entry.mealType)
  );
+ /* v19.2: "tiszta" (vércukor és inzulin NÉLKÜLI) "Egyéb tevékenység" bejegyzésnél
+    a dátum/idő sorban a bejegyzés időpontja helyett a tevékenység teljes
+    -tól-ig időtartama látszik; a kis csempén (lentebb) emiatt csak az
+    időtartam marad, hogy az információ ne ismétlődjön kétszer. Ha más adat
+    (vércukor, inzulin) is szerepel a bejegyzésen, minden a régi módon marad:
+    a dátum/idő a bejegyzés időpontját mutatja, a -tól-ig a csempén (zárójelben) látszik. */
+ const _pureAct = entry.type === 'Egyéb tevékenység' && !entry.bloodGlucose && !entry.insulinRapid && !entry.insulinLong;
+ const _actRange = actRangeLbl(entry);
  const dateNode = h('span', {
   className: 'font-mono whitespace-nowrap hbc-entry-datetext'
- }, fmtAlwaysDT(entry.timestamp));
+ }, (_pureAct && _actRange) ? (fmtDatePrefix(entry.timestamp) + ' – ' + _actRange) : fmtAlwaysDT(entry.timestamp));
  const badgeItems = [
   bg && h(Badge, {
    key: 'bg',
@@ -3952,8 +3970,10 @@ function EntryCard({
   entry.activity && h(Badge, {
    key: 'act',
    bg: 'bg-yellow-100 text-yellow-700',
-   /* v18.6: időtartam helyett/mellett a "-tól-ig" idősáv is látszik */
-   text: '🏃 ' + entry.activity + (entry.activityDur > 0 ? ' · ' + fmtDur(entry.activityDur) + (actRangeLbl(entry) ? ' (' + actRangeLbl(entry) + ')' : '') : '')
+   /* v18.6: időtartam helyett/mellett a "-tól-ig" idősáv is látszik.
+      v19.2: "tiszta" tevékenység-bejegyzésnél a -tól-ig már a dátumsorban
+      látszik (lásd dateNode), itt ilyenkor csak az időtartam marad. */
+   text: '🏃 ' + entry.activity + (entry.activityDur > 0 ? ' · ' + fmtDur(entry.activityDur) + ((!_pureAct && _actRange) ? ' (' + _actRange + ')' : '') : '')
   }),
   /* v14: fizikai aktivitás szint (1–5, elnevezhető) */
   entry.activityLevel > 0 && h(Badge, {

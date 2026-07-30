@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '19.4';
+const APP_VERSION = '19.5';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -7303,10 +7303,11 @@ function AddEntry({
      h('input', {
       type: 'datetime-local',
       value: form.timestamp,
-      onChange: e => setForm({
-       ...form,
-       timestamp: e.target.value
-      }),
+      onChange: e => setForm(p => ({
+       ...p,
+       timestamp: e.target.value,
+       bloodGlucoseTime: p.bloodGlucose ? (p.bloodGlucoseTime || p.timestamp) : p.bloodGlucoseTime
+      })),
       required: true,
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      })),
@@ -8176,10 +8177,11 @@ function EditModal({
      h('input', {
       type: 'datetime-local',
       value: form.timestamp || '',
-      onChange: e => setForm({
-       ...form,
-       timestamp: e.target.value
-      }),
+      onChange: e => setForm(p => ({
+       ...p,
+       timestamp: e.target.value,
+       bloodGlucoseTime: p.bloodGlucose ? (p.bloodGlucoseTime || p.timestamp) : p.bloodGlucoseTime
+      })),
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      })),
     h('div', null, h('label', {

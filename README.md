@@ -8,6 +8,15 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v19.5 korrekció (2026. július 30.)
+
+- **Vércukor-mérés időpontja nem csúszik el:** ha egy már rögzített
+  vércukor-értékkel rendelkező bejegyzés fő Időpontját utólag módosítod
+  (pl. egy Étkezésnél előrébb tolod az időt, mert később eszel), a mérés
+  eredeti pillanata mostantól mindig külön megmarad — mintha a "Mérés ideje
+  eltér?" opcióval explicit módosítottad volna. Korábban a mérés implicit
+  időpontja együtt csúszott a fő Időponttal.
+
 ## v19.4 korrekció (2026. július 30.)
 
 - **Kerek mmol/l érték teljes alakban:** az Áttekintés és a Bejegyzések oldal

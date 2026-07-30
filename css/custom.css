@@ -24,6 +24,23 @@ input[type=date],input[type=datetime-local]{color-scheme:light}
 @media(min-width:768px){.hbc-logo{height:clamp(58px,5.5vw,76px);max-width:none}}
 [data-hbc-dark] .hbc-logo{background:#fff;padding:2px}
 
+/* ═══════════ v19.5 korrekció — PROFILKÉP (fejléc) ═══════════
+   Korábban a w-9/h-9/md:w-11/md:h-11 Tailwind osztályok nem szerepeltek
+   a lepurgázott app.css-ben, ezért a profilkép a natív (256×256px) méretében
+   jelent meg — irrelevánsan nagyra nőve, szétverve a fejléc reszponzivitását.
+   Saját, garantáltan létező osztály — a .hbc-logo méretéhez igazodó clamp(),
+   pontosan a logó 2×-ese (a felhasználói kérés szerint, elemzés alapján ez
+   minden nézetben biztonságosan elfér, nem borul fel a fejléc). */
+.hbc-avatar{height:clamp(76px,22vw,96px);width:clamp(76px,22vw,96px);
+  object-fit:cover;border-radius:50%;flex-shrink:0}
+@media(min-width:768px){.hbc-avatar{height:clamp(116px,11vw,152px);width:clamp(116px,11vw,152px)}}
+
+/* ═══════════ v19.5 korrekció — PROFILKÉP (Beállítások, előnézet) ═══════════
+   Ugyanaz a hiba (hiányzó w-14/h-14 osztály) itt is a kép natív méretben
+   jelenését okozta, ami kilökte a "Fénykép választása"/"Törlés" gombokat
+   a látható területről. Fix, garantált méret + tördelhető sor (flex-wrap). */
+.hbc-avatar-preview{width:56px;height:56px;object-fit:cover;border-radius:50%;flex-shrink:0}
+
 /* ═══════════ v9 — MOBIL HAMBURGER MENÜ ═══════════ */
 .hbc-menu{background:rgba(255,255,255,.98);backdrop-filter:blur(12px);
   -webkit-backdrop-filter:blur(12px);border-radius:0 0 24px 24px;

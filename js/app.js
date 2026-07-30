@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '19.5';
+const APP_VERSION = '19.6';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -9890,14 +9890,14 @@ function Settings({
       className: 'text-sm font-bold text-indigo-700 block mb-1'
      }, t('Profilkép')),
      h('div', {
-       className: 'flex items-center gap-3'
+       className: 'flex flex-wrap items-center gap-3'
       },
       s.avatarPhoto ? h('img', {
        src: s.avatarPhoto,
        alt: t('Profilkép'),
-       className: 'w-14 h-14 rounded-full object-cover border-2 border-indigo-200'
+       className: 'hbc-avatar-preview rounded-full border-2 border-indigo-200'
       }) : h('div', {
-       className: 'w-14 h-14 rounded-full bg-indigo-100 border-2 border-indigo-200 flex items-center justify-center text-2xl'
+       className: 'hbc-avatar-preview rounded-full bg-indigo-100 border-2 border-indigo-200 flex items-center justify-center text-2xl'
       }, '🙂'),
       h('label', {
         className: 'px-3 py-2 rounded-xl text-sm font-bold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer'
@@ -11492,7 +11492,7 @@ function App() {
      effSettings.avatarPhoto && h('img', {
       src: effSettings.avatarPhoto,
       alt: window.t('Profilkép'),
-      className: 'w-9 h-9 md:w-11 md:h-11 rounded-full object-cover border-2 border-indigo-200 shrink-0'
+      className: 'hbc-avatar border-2 border-indigo-200'
      }),
      h('div', {
        className: 'min-w-0'

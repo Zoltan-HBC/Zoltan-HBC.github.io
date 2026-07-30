@@ -8,6 +8,18 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v19.6 korrekció (2026. július 30.)
+
+- **Profilkép mérete és reszponzivitása javítva:** a fejlécben megjelenő
+  profilkép korábban a lepurgázott stíluslapból hiányzó méretosztályok miatt
+  a natív (256×256 képpontos) méretében jelent meg — irrelevánsan nagyra
+  nőve, és szétverve a fejléc, illetve (feltöltés után) a Beállítások
+  "Fénykép választása"/"Törlés" gombjainak elrendezését minden eszközön,
+  asztali nézetben is. Mostantól a fejléci profilkép mérete a HBC logó
+  pontosan kétszerese (saját, garantáltan érvényes CSS-osztállyal, nem a
+  hiányzó Tailwind-osztályoktól függ), a Beállítások oldali előnézet fix,
+  kompakt méretű, a gombsor pedig szükség esetén tördelődik. (7.4, 7.5)
+
 ## v19.5 korrekció (2026. július 30.)
 
 - **Vércukor-mérés időpontja nem csúszik el:** ha egy már rögzített

@@ -624,10 +624,23 @@ window.HBC_UNITS = (function() {
  function label() {
   return unit === 'mgdl' ? 'mg/dl' : 'mmol/l';
  }
- /* tárolt (mmol/l) → megjelenített érték */
+ /* tárolt (mmol/l) → megjelenített érték
+    FONTOS: ez egy SZÁM-ot ad vissza (nem szöveget) — grafikonok (Chart.js
+    data-tömbjei, tengelyhatárok) számként használják, ezért ez a függvény
+    NEM módosítható szöveg-formázásra, az kerek mmol/l értéknél (pl. 8.0)
+    elveszítené a tizedesjegyet, mert a JS a 8.0 számot 8-ként írja ki. */
  function disp(v) {
   if (v === null || v === undefined || v === '' || isNaN(v)) return v;
   return unit === 'mgdl' ? Math.round(parseFloat(v) * F) : Math.round(parseFloat(v) * 10) / 10;
+ }
+ /* v19.4 (korrekció): kijelzéshez szánt, FIX tizedesjegyű SZÖVEG — mmol/l-nél
+    mindig egy tizedesjegy (pl. "8.0", sosem csak "8"), mg/dl-nél egész szám.
+    Kártyák/csempék szöveges megjelenítéséhez használandó a puszta disp()
+    helyett, mindenhol, ahol a végeredmény szövegként jelenik meg. */
+ function dispFixed(v) {
+  if (v === null || v === undefined || v === '' || isNaN(v)) return '';
+  const n = parseFloat(v);
+  return unit === 'mgdl' ? String(Math.round(n * F)) : (Math.round(n * 10) / 10).toFixed(1);
  }
  /* megjelenített szöveg (magyar tizedesvesszőt is elfogad) → tárolt mmol/l */
  function toMmol(x) {
@@ -645,6 +658,7 @@ window.HBC_UNITS = (function() {
   getUnit,
   label,
   disp,
+  dispFixed,
   toMmol,
   step,
   F

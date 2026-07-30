@@ -243,6 +243,15 @@ html.hbc-bigfont .text-\[10px\],html.hbc-bigfont .text-\[11px\]{font-size:.75rem
 [data-hbc-dark] .bg-teal-50{background-color:#132e2b!important}
 [data-hbc-dark] .text-teal-800{color:#94e0d3!important}
 [data-hbc-dark] .border-teal-200{border-color:#1f4a44!important}
+/* v19.4 (korrekció): a text-teal-700/600 és a bg-teal-50 opacitás-változatok
+   (bg-teal-50/40, bg-teal-50/60) korábban nem voltak felülírva sötét módban —
+   sötétzöld szöveg maradt a (világos módra tervezett) szürkés-sötét háttéren,
+   olvashatatlanul. Az "Aktivitás/hőség profilok" kártyák (Beállítások és
+   Statisztika oldal) érintettek. */
+[data-hbc-dark] .text-teal-700{color:#5eead4!important}
+[data-hbc-dark] .text-teal-600{color:#2dd4bf!important}
+[data-hbc-dark] .bg-teal-50\/40{background-color:rgba(19,46,43,.4)!important}
+[data-hbc-dark] .bg-teal-50\/60{background-color:rgba(19,46,43,.6)!important}
 [data-hbc-dark] .border-emerald-200{border-color:#1f4a3a!important}
 [data-hbc-dark] .border-emerald-100{border-color:#1a3d31!important}
 

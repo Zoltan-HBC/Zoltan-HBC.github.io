@@ -8,6 +8,19 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v19.4 korrekció (2026. július 30.)
+
+- **Kerek mmol/l érték teljes alakban:** az Áttekintés és a Bejegyzések oldal
+  kártyáin a vércukor mmol/l-es értéke mostantól mindig egy tizedesjeggyel
+  jelenik meg (pl. "8.0") — korábban a kerek értékek tizedesjegy nélkül,
+  csonkítva látszottak (pl. "8"). Javítás: új `window.bgU.dispFixed()`
+  segédfüggvény (a `disp()` numerikus marad, mert a grafikonok is használják).
+- **Sötét mód — Aktivitás/hőség profilok kontrasztjavítás:** a profilokkal
+  kapcsolatos kártyák (Beállítások, Statisztika) szövege sötét módban is jól
+  olvasható lett — korábban sötétzöld szöveg jelent meg szürkés háttéren
+  (hiányzó `.text-teal-700`/`.text-teal-600` és `bg-teal-50` opacitás-változat
+  dark-mode felülírások pótolva).
+
 ## v19.3 kiegészítés (2026. július 30.)
 
 - **Kalibrálható visszatekintő elemzés:** az Aktivitás/hőség profilok

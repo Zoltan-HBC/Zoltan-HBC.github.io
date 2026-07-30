@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '19.3';
+const APP_VERSION = '19.4';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3968,7 +3968,8 @@ function EntryCard({
    key: 'bg',
    bg: bgBadge,
    /* v18.7 (feladat 6–7): ha a mérés saját időpontja eltér a bejegyzés fő idejétől, az is látszik */
-   text: '🩸 ' + window.bgU.disp(bg) + ' ' + window.bgU.label() + (entry.bloodGlucoseTime && entry.bloodGlucoseTime !== entry.timestamp ? ' ⏰' + fmtTime(entry.bloodGlucoseTime) : '')
+   /* v19.4 (korrekció): dispFixed() — kerek mmol/l érték (pl. 8.0) is teljes alakban, ne csak "8" */
+   text: '🩸 ' + window.bgU.dispFixed(bg) + ' ' + window.bgU.label() + (entry.bloodGlucoseTime && entry.bloodGlucoseTime !== entry.timestamp ? ' ⏰' + fmtTime(entry.bloodGlucoseTime) : '')
   }),
   entry.carbs > 0 && h(Badge, {
    key: 'ch',
@@ -4289,7 +4290,7 @@ function Dashboard({
     }, 'TIR')),
     h('div', null, h('p', {
      className: 'text-2xl font-black'
-    }, window.bgU.disp(bgAll7.reduce((s, e) => s + parseFloat(e.bloodGlucose), 0) / bgAll7.length)), h('p', {
+    }, window.bgU.dispFixed(bgAll7.reduce((s, e) => s + parseFloat(e.bloodGlucose), 0) / bgAll7.length)), h('p', {
      className: 'text-xs opacity-80'
     }, window.t('Átlag') + ' (' + window.bgU.label() + ')')),
     h('div', null, h('p', {
@@ -4451,7 +4452,7 @@ function Dashboard({
     }, '📊 Átlag vércukor (7 nap)'),
     h('p', {
      className: 'text-3xl font-black'
-    }, String(window.bgU.disp(avgBG)), h('span', {
+    }, window.bgU.dispFixed(avgBG), h('span', {
      className: 'text-sm ml-1'
     }, window.bgU.label())),
     h('p', {
@@ -4500,9 +4501,10 @@ function Dashboard({
      }, '🩸 Legutóbbi vércukor'),
      h('p', {
       className: 'text-5xl font-black'
-     }, /* v18.7 FIX (feladat 2): kerek mmol/l érték (pl. 7.0) is teljes
-         alakban jelenjen meg, ne csak "7" — mg/dl-nél marad az egész szám */
-     (window.bgU.getUnit() === 'mgdl' ? String(window.bgU.disp(latestVal)) : window.bgU.disp(latestVal).toFixed(1)),
+     }, /* v18.7 FIX (feladat 2), v19.4-ben dispFixed()-re egyszerűsítve: kerek
+         mmol/l érték (pl. 7.0) is teljes alakban jelenjen meg, ne csak "7" —
+         mg/dl-nél marad az egész szám */
+     window.bgU.dispFixed(latestVal),
      h('span', {
       className: 'text-xl ml-1'
      }, window.bgU.label())),
@@ -7935,7 +7937,7 @@ function ViewEntryModal({
      row('📝', 'Típus', window.t(entry.type || '')),
      entry.mealType && row('🍽️', 'Étkezés típusa', window.t(entry.mealType)),
      row('⏰', 'Időpont', fmtAlwaysDT(entry.timestamp)),
-     entry.bloodGlucose != null && entry.bloodGlucose !== '' && row('🩸', 'Vércukor', window.bgU.disp(entry.bloodGlucose) + ' ' + window.bgU.label() +
+     entry.bloodGlucose != null && entry.bloodGlucose !== '' && row('🩸', 'Vércukor', window.bgU.dispFixed(entry.bloodGlucose) + ' ' + window.bgU.label() +
      /* v18.7 (feladat 6–7): a mérés saját időpontja, ha eltér a bejegyzés fő idejétől */
      (entry.bloodGlucoseTime && entry.bloodGlucoseTime !== entry.timestamp ? ' · ⏰ ' + fmtAlwaysDT(entry.bloodGlucoseTime) : '')),
      foods.length > 0 && h('div', {

@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '19.2';
+const APP_VERSION = '19.3';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3682,9 +3682,10 @@ function lbl(text) {
  }, text);
 }
 
-function card(children, cls = '') {
+function card(children, cls = '', id) {
  return h('div', {
-  className: 'bg-white/95 rounded-2xl shadow-lg p-4 ' + (cls || '')
+  className: 'bg-white/95 rounded-2xl shadow-lg p-4 ' + (cls || ''),
+  id: id || undefined
  }, children);
 }
 
@@ -3825,9 +3826,16 @@ window.actProfileDaypartKey = actProfileDaypartKey;
 /* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — visszatekintő elemzés (Statisztika oldal) ═══
    Csak TÁJÉKOZTATÓ jellegű — semmit nem ír át automatikusan, a felhasználó dönt.
    Minden profillal jelölt, vércukor-értékkel rendelkező bejegyzéshez megkeresi az
-   időrendben KÖVETKEZŐ, 30–360 percen belüli mérést, és ebből számol átlagos
-   elmozdulást profilonként — ez adja a visszajelzés alapját. */
-function activityProfileAnalysis(entries, sinceDays) {
+   időrendben KÖVETKEZŐ, [minGapMin–maxGapMin] percen belüli mérést, és ebből számol
+   átlagos elmozdulást profilonként — ez adja a visszajelzés alapját.
+   v19.3 (feladat 1): a vizsgált időszak (sinceDays) 1 napig lecsökkenthető, a
+   perc-ablak (minGapMin/maxGapMin) felhasználó által kalibrálható — lásd a
+   Statisztika oldal "Számítás finomhangolása" blokkját. Minden csoporthoz az
+   első/utolsó felhasznált mérés időpontja is visszaadásra kerül, hogy az app
+   megmutathassa, "miből" számolt. */
+function activityProfileAnalysis(entries, sinceDays, minGapMin, maxGapMin) {
+ const _minGap = (minGapMin != null && !isNaN(minGapMin)) ? minGapMin : 30;
+ const _maxGap = (maxGapMin != null && !isNaN(maxGapMin)) ? maxGapMin : 360;
  const cutoff = subD(sinceDays || 30);
  const all = (entries || []).filter(e => e.timestamp).slice().sort((a, b) => a.timestamp.localeCompare(b.timestamp));
  const groups = {};
@@ -3840,27 +3848,38 @@ function activityProfileAnalysis(entries, sinceDays) {
    const cand = all[i];
    if (cand.bloodGlucose == null || cand.bloodGlucose === '') continue;
    const dtMin = (new Date(cand.timestamp) - new Date(e.timestamp)) / 60000;
-   if (dtMin > 360) break;
-   if (dtMin >= 30) { next = cand; }
-   break;
+   if (dtMin > _maxGap) break;
+   if (dtMin >= _minGap) { next = cand; break; }
   }
   if (!next) return;
   const delta = parseFloat(next.bloodGlucose) - parseFloat(e.bloodGlucose);
   const key = e.activityProfileId;
-  if (!groups[key]) groups[key] = { name: e.activityProfileName || key, n: 0, sumDelta: 0, sumPct: 0 };
+  if (!groups[key]) groups[key] = { name: e.activityProfileName || key, n: 0, sumDelta: 0, sumPct: 0, first: e.timestamp, last: e.timestamp };
   groups[key].n++;
   groups[key].sumDelta += delta;
   groups[key].sumPct += (parseFloat(e.activityProfilePct) || 0);
+  if (e.timestamp < groups[key].first) groups[key].first = e.timestamp;
+  if (e.timestamp > groups[key].last) groups[key].last = e.timestamp;
  });
  return Object.keys(groups).map(k => ({
   id: k,
   name: groups[k].name,
   n: groups[k].n,
   avgDelta: groups[k].sumDelta / groups[k].n,
-  avgPct: groups[k].sumPct / groups[k].n
+  avgPct: groups[k].sumPct / groups[k].n,
+  first: groups[k].first,
+  last: groups[k].last
  })).sort((a, b) => b.n - a.n);
 }
 window.activityProfileAnalysis = activityProfileAnalysis;
+
+/* v19.3 (feladat 1): gyors preset-lista a visszatekintő elemzés perc-ablakára —
+   előre jó beállítások, de a két érték külön-külön is szabadon felülírható. */
+const ACT_ANALYSIS_GAP_PRESETS = [
+ { key: 'short', label: 'Rövid (gyors inzulin hatása) — 15–120 perc', min: 15, max: 120 },
+ { key: 'default', label: 'Alapértelmezett (ajánlott) — 30–360 perc', min: 30, max: 360 },
+ { key: 'long', label: 'Hosszú (napközbeni elhúzódó hatás) — 60–480 perc', min: 60, max: 480 }
+];
 
 /* Fizikai aktivitás szintek (1–5) — a nevek a Beállításokban módosíthatók */
 const ACT_LEVEL_DEFAULTS = ['Nagyon könnyű', 'Könnyű', 'Közepes', 'Megerőltető', 'Nagyon megerőltető'];
@@ -4141,6 +4160,12 @@ function Dashboard({
  }, [entries, tod]);
  const dailyGoal = 4; /* napi cél: legalább 4 rögzítés */
  const dailyDone = Math.min(todayEs.length, dailyGoal);
+ /* v19.3 (feladat 2): legutóbb rögzített testsúly — a "Mai naplózási kör" csempén jelenik meg */
+ const lastWeightEntry = useMemo(() => {
+  const withW = (entries || []).filter(e => e.weight != null && e.weight !== '' && !isNaN(parseFloat(e.weight)));
+  if (!withW.length) return null;
+  return withW.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+ }, [entries]);
  /* v8 javítás: _dLow/_dHigh a használat ELŐTT deklarálva (TDZ-hiba a v7-ben) */
  const _dLow = settings && settings.lowBG != null ? settings.lowBG : 3.9;
  const _dHigh = settings && settings.highBG != null ? settings.highBG : 10.0;
@@ -4303,9 +4328,19 @@ function Dashboard({
    h('div', {
      className: 'rounded-2xl shadow p-4 bg-white border-2 border-indigo-100'
     },
-    h('p', {
-     className: 'text-xs font-bold text-indigo-400 mb-1'
-    }, '⭕ ' + window.t('Mai naplózási kör')),
+    /* v19.3 (feladat 2): a felirat-sor mobilon a testsúly-kijelzést is hordozza,
+       jobbra rendezve, a csík FÖLÖTT — desktopon a testsúly külön sorban, a
+       csík ALATT jelenik meg (lásd lentebb). */
+    h('div', {
+      className: 'flex items-center justify-between gap-2 mb-1'
+     },
+     h('p', {
+      className: 'text-xs font-bold text-indigo-400'
+     }, '⭕ ' + window.t('Mai naplózási kör')),
+     lastWeightEntry && h('p', {
+      className: 'md:hidden text-xs font-bold text-indigo-500 whitespace-nowrap'
+     }, '⚖️ ' + parseFloat(lastWeightEntry.weight).toFixed(1) + ' kg')
+    ),
     h('div', {
       className: 'flex items-center gap-3'
      },
@@ -4322,7 +4357,10 @@ function Dashboard({
         background: 'linear-gradient(90deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'
        }
       }))
-    )
+    ),
+    lastWeightEntry && h('p', {
+     className: 'hidden md:block text-xs font-bold text-indigo-500 mt-2'
+    }, '⚖️ ' + parseFloat(lastWeightEntry.weight).toFixed(1) + ' kg' + ' · ' + fmtDatePrefix(lastWeightEntry.timestamp))
    ),
    h('div', {
      className: 'rounded-2xl shadow p-4 bg-white border-2 border-indigo-100'
@@ -5697,14 +5735,34 @@ function Statistics({
  entries,
  settings,
  docEmails,
- onSaveDocEmails
+ onSaveDocEmails,
+ onSaveActCfg
 }) {
  const [mode, setMode] = useState('7');
  const [fromD, setFromD] = useState(subD(7));
  const [toD, setToD] = useState(todayStr());
- /* v19: aktivitás/hőség profilok — visszatekintő elemzés időszaka (napban), állítható */
- const [actAnalysisDays, setActAnalysisDays] = useState(30);
- const actAnalysis = useMemo(() => activityProfileAnalysis(entries, actAnalysisDays), [entries, actAnalysisDays]);
+ /* v19: aktivitás/hőség profilok — visszatekintő elemzés időszaka (napban), állítható.
+    v19.3 (feladat 1): a kezdőérték és a perc-ablak (mettől-meddig vett mérés számít
+    "a bejegyzés utáni értéknek") a settings-ből jön, hogy a kalibráció megmaradjon. */
+ const [actAnalysisDays, setActAnalysisDays] = useState((settings && settings.actAnalysisDays) || 30);
+ const [actGapMin, setActGapMin] = useState((settings && settings.actAnalysisMinGap) != null ? settings.actAnalysisMinGap : 30);
+ const [actGapMax, setActGapMax] = useState((settings && settings.actAnalysisMaxGap) != null ? settings.actAnalysisMaxGap : 360);
+ const actAnalysis = useMemo(() => activityProfileAnalysis(entries, actAnalysisDays, actGapMin, actGapMax), [entries, actAnalysisDays, actGapMin, actGapMax]);
+ /* v19.3: a három kalibrációs érték bármelyikének módosítása azonnal, csendben
+    (visszajelző üzenet nélkül) elmentődik a settings-be — ugyanaz az elv, mint az
+    orvos-e-mail listánál (onSaveDocEmails). */
+ const updateActCfg = patch => {
+  const merged = {
+   actAnalysisDays: actAnalysisDays,
+   actAnalysisMinGap: actGapMin,
+   actAnalysisMaxGap: actGapMax,
+   ...patch
+  };
+  setActAnalysisDays(merged.actAnalysisDays);
+  setActGapMin(merged.actAnalysisMinGap);
+  setActGapMax(merged.actAnalysisMaxGap);
+  onSaveActCfg && onSaveActCfg(merged);
+ };
  const iob = useMemo(() => calcIOB(entries, settings && settings.diaHours), [entries, settings]);
  const patR = useRef(null);
  const patC = useRef(null);
@@ -6236,31 +6294,109 @@ function Statistics({
    h('h3', {
     className: 'font-black text-teal-700 mb-1'
    }, '🌡️ ' + window.t('Aktivitás/hőség profilok — visszatekintő elemzés')),
+   /* v19.3 (feladat 1): a vizsgált időszak most már 1 napra is lecsökkenthető —
+      gyorsgombok + szabad számbeviteli mező. */
    h('div', {
-     className: 'flex items-center gap-2 mb-3'
+     className: 'flex items-center gap-2 mb-2 flex-wrap'
     },
     h('label', {
      className: 'text-xs font-bold text-gray-500'
     }, window.t('Vizsgált időszak') + ':'),
+    [1, 7, 30, 90].map(d => h('button', {
+     key: d,
+     type: 'button',
+     onClick: () => updateActCfg({ actAnalysisDays: d }),
+     className: 'text-xs font-bold px-2 py-1 rounded-lg ' + (actAnalysisDays === d ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-700 border border-teal-200')
+    }, d === 1 ? window.t('1 nap') : d + ' ' + window.t('nap'))),
     h('input', {
      type: 'number',
-     min: 7,
+     min: 1,
      max: 365,
      step: 1,
      value: actAnalysisDays,
-     onChange: e => setActAnalysisDays(Math.max(7, parseInt(e.target.value) || 30)),
-     className: 'w-20 border-2 border-teal-200 rounded-xl px-2 py-1 text-sm focus:outline-none'
+     onChange: e => updateActCfg({ actAnalysisDays: Math.max(1, parseInt(e.target.value) || 1) }),
+     className: 'w-16 border-2 border-teal-200 rounded-xl px-2 py-1 text-sm focus:outline-none'
     }),
     h('span', {
      className: 'text-xs text-gray-400'
-    }, window.t('nap'))
+    }, window.t('nap (egyéni)'))
    ),
+   /* v19.3 (feladat 1): kalibrálható számítási részlet — mennyi idő teljen el a
+      bejegyzés után, hogy egy mérés még "az adott profil hatásának" számítson.
+      Gyors preset-lista előre jó beállítással, de mindkét érték külön is írható. */
+   h('details', {
+     className: 'mb-3'
+    },
+    h('summary', {
+     className: 'text-xs font-bold text-teal-600 cursor-pointer select-none'
+    }, '⚙️ ' + window.t('Számítás finomhangolása')),
+    h('div', {
+      className: 'mt-2 p-3 rounded-xl bg-teal-50/60 border border-teal-200 space-y-2'
+     },
+     h('div', null,
+      h('label', {
+       className: 'text-xs font-bold text-gray-500 block mb-1'
+      }, window.t('Gyors preset') + ':'),
+      h('select', {
+       value: (ACT_ANALYSIS_GAP_PRESETS.find(p => p.min === actGapMin && p.max === actGapMax) || {}).key || 'custom',
+       onChange: e => {
+        const p = ACT_ANALYSIS_GAP_PRESETS.find(x => x.key === e.target.value);
+        if (p) updateActCfg({ actAnalysisMinGap: p.min, actAnalysisMaxGap: p.max });
+       },
+       className: 'w-full border-2 border-teal-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none'
+      },
+      ACT_ANALYSIS_GAP_PRESETS.map(p => h('option', {
+       key: p.key,
+       value: p.key
+      }, window.t(p.label))),
+      h('option', {
+       value: 'custom'
+      }, window.t('Egyéni beállítás')))),
+     h('div', {
+       className: 'flex items-center gap-2 flex-wrap'
+      },
+      h('label', {
+       className: 'text-xs font-bold text-gray-500'
+      }, window.t('Legkorábban a bejegyzés után') + ':'),
+      h('input', {
+       type: 'number',
+       min: 0,
+       max: 1440,
+       value: actGapMin,
+       onChange: e => updateActCfg({ actAnalysisMinGap: Math.max(0, parseInt(e.target.value) || 0) }),
+       className: 'w-20 border-2 border-teal-200 rounded-xl px-2 py-1 text-sm focus:outline-none'
+      }),
+      h('span', {
+       className: 'text-xs text-gray-400'
+      }, window.t('perc')),
+      h('label', {
+       className: 'text-xs font-bold text-gray-500'
+      }, window.t('legkésőbb') + ':'),
+      h('input', {
+       type: 'number',
+       min: 1,
+       max: 1440,
+       value: actGapMax,
+       onChange: e => updateActCfg({ actAnalysisMaxGap: Math.max(actGapMin + 1, parseInt(e.target.value) || 360) }),
+       className: 'w-20 border-2 border-teal-200 rounded-xl px-2 py-1 text-sm focus:outline-none'
+      }),
+      h('span', {
+       className: 'text-xs text-gray-400'
+      }, window.t('perc'))),
+     h('p', {
+      className: 'text-[11px] text-gray-400'
+     }, window.t('Ez határozza meg, hogy egy mérés mennyi idő elteltével még "az adott profilhoz tartozó eredménynek" számít. Alapból jó, de finomítható.'))
+    )),
    actAnalysis.length === 0 ? h('p', {
     className: 'text-xs text-gray-400'
    }, window.t('Még nincs elég adat: jelölj meg profilt egy-két Étkezés bejegyzésnél a bólus-kalkulátornál, majd térj vissza ide.')) :
    h('div', {
      className: 'space-y-2'
     },
+    /* v19.3 (feladat 1): visszajelzés, hogy "miből" számolt az app */
+    h('p', {
+     className: 'text-[11px] text-gray-400'
+    }, '📊 ' + window.t('Az utolsó') + ' ' + actAnalysisDays + ' ' + window.t('nap adatai alapján') + ' (' + fmtDatePrefix(subD(actAnalysisDays - 1) + 'T00:00') + ' – ' + fmtDatePrefix(todayStr() + 'T00:00') + ').'),
     actAnalysis.map(g => h('div', {
       key: g.id,
       className: 'p-3 rounded-xl border-2 border-teal-200 bg-teal-50/40'
@@ -6271,9 +6407,17 @@ function Statistics({
      h('p', {
       className: 'text-xs text-teal-700 mt-1'
      }, window.t('Átlagos vércukor-elmozdulás a mérés után') + `: ${g.avgDelta > 0 ? '+' : ''}${g.avgDelta.toFixed(1)} ${window.bgU.label()}`),
+     /* v19.3: pontosan miből (mennyi és milyen időszakú mérésből) jött az átlag */
+     h('p', {
+      className: 'text-[11px] text-gray-400 mt-0.5'
+     }, g.n === 1 ? window.t('1 mérésből') + ' (' + fmtDatePrefix(g.first) + ')' :
+      window.t('mérésekből') + ': ' + fmtDatePrefix(g.first) + ' – ' + fmtDatePrefix(g.last)),
      g.n < 3 ? h('p', {
       className: 'text-xs text-gray-400 mt-1'
-     }, window.t('Még kevés adat (n<3) — egyelőre nem eléggé megbízható.')) :
+     }, '🔎 ' + window.t('Kevés adat (n<3) — inkább csak irányadó, egyelőre nem eléggé megbízható.')) :
+     g.n < 8 ? h('p', {
+      className: 'text-xs text-amber-600 mt-1'
+     }, '🔎 ' + window.t('Korlátozott mennyiségű adat — óvatosan értelmezd, még gyűjts tapasztalatot.')) :
      h('p', {
       className: 'text-xs font-bold mt-1 ' + (g.avgDelta > 1.5 ? 'text-red-600' : g.avgDelta < -1.5 ? 'text-amber-600' : 'text-green-600')
      }, g.avgDelta > 1.5 ? '💡 ' + window.t('Talán nagyobb csökkentés indokolt ennél a profilnál.') :
@@ -6967,7 +7111,8 @@ function AddEntry({
   activityProfileName: '',
   activityProfilePct: null,
   weatherTemp: '',
-  weatherSource: null
+  weatherSource: null,
+  weight: '' /* v19.3 (feladat 2): testsúly — bármely bejegyzéstípusnál rögzíthető */
  });
  const [showPicker, setShowPicker] = useState(false);
  const [fSearch, setFSearch] = useState('');
@@ -7118,7 +7263,9 @@ function AddEntry({
    activityProfileName: (_hasCH && totalCH > 0 && form.activityProfileId && actProfile) ? actProfile.name : '',
    activityProfilePct: (_hasCH && totalCH > 0 && form.activityProfileId) ? actPct : null,
    weatherTemp: (_hasCH && totalCH > 0 && form.weatherTemp !== '') ? parseFloat(form.weatherTemp) : null,
-   weatherSource: (_hasCH && totalCH > 0 && form.weatherTemp !== '') ? (form.weatherSource || 'manual') : null
+   weatherSource: (_hasCH && totalCH > 0 && form.weatherTemp !== '') ? (form.weatherSource || 'manual') : null,
+   /* v19.3 (feladat 2): testsúly — bármely bejegyzéstípusnál rögzíthető */
+   weight: (form.weight !== '' && form.weight != null) ? parseFloat(form.weight) : null
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
   const warn = extremeBGWarn(_mmol);
@@ -7245,6 +7392,25 @@ function AddEntry({
      }),
      closedLabel: 'Mérés ideje eltér?',
      openLabel: 'Mérés időpontja'
+    })
+   ),
+
+   /* v19.3 (feladat 2): testsúly — opcionális, bármely bejegyzéstípusnál kitölthető */
+   h('div', null,
+    h('label', {
+     className: 'text-sm font-bold text-gray-500 block mb-1'
+    }, window.t('⚖️ Testsúly (kg)')),
+    h('input', {
+     type: 'number',
+     step: '0.1',
+     min: 0,
+     value: form.weight,
+     onChange: e => setForm(p => ({
+      ...p,
+      weight: e.target.value
+     })),
+     placeholder: window.t('pl. 72.5'),
+     className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
     })
    ),
 
@@ -7952,7 +8118,9 @@ function EditModal({
    activityFrom: (_hasAct && form.activityFrom) ? form.activityFrom : null,
    activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
-   private: _isAct ? !!form.private : false /* v14: privát CSAK Egyéb tevékenységnél */
+   private: _isAct ? !!form.private : false, /* v14: privát CSAK Egyéb tevékenységnél */
+   /* v19.3 (feladat 2): testsúly — bármely bejegyzéstípusnál rögzíthető/szerkeszthető */
+   weight: (form.weight !== '' && form.weight != null) ? parseFloat(form.weight) : null
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
   const warn = extremeBGWarn(_mmol);
@@ -8050,6 +8218,22 @@ function EditModal({
       }),
       closedLabel: 'Mérés ideje eltér?',
       openLabel: 'Mérés időpontja'
+     })),
+    h('div', null,
+     h('label', {
+      className: 'text-sm font-bold text-gray-500 block mb-1'
+     }, window.t('⚖️ Testsúly (kg)')),
+     h('input', {
+      type: 'number',
+      step: '0.1',
+      min: 0,
+      value: form.weight != null ? form.weight : '',
+      onChange: e => setForm(p => ({
+       ...p,
+       weight: e.target.value
+      })),
+      placeholder: window.t('pl. 72.5'),
+      className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      })),
     h('div', null,
      /* v11.1: a bejegyzés ételeinek kezelése (hozzáadás gyorsválasztóból, szorzó, törlés) */
@@ -9381,7 +9565,11 @@ const DEFAULT_SETTINGS = {
  featSearch: true,    /* keresés a naplóban */
  featBigFont: false,  /* nagy betűs mód (megjelenítési opció — alapból ki) */
  featWeekly: true,    /* heti összefoglaló a követőnek */
- featActivityProfiles: true /* v19: aktivitás/hőség profilok — bólusjavaslat korrekciója */
+ featActivityProfiles: true, /* v19: aktivitás/hőség profilok — bólusjavaslat korrekciója */
+ /* v19.3 (feladat 1): aktivitás/hőség visszatekintő elemzés kalibrációja */
+ actAnalysisDays: 30,
+ actAnalysisMinGap: 30,
+ actAnalysisMaxGap: 360
 };
 
 /* v8: extrém vércukorérték-ellenőrzés (mmol/l-ben) — elgépelés-védelem */
@@ -9503,12 +9691,48 @@ function NumInput({
 // ═══════════ BEÁLLÍTÁSOK (v7) ═══════════
 function Settings({
  settings,
- onSave
+ onSave,
+ onNavigate
 }) {
  const [s, setS] = useState({
   ...settings
  });
  const fi = 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-400';
+ /* v19.3 (Feature B): profilkép — kamera (spontán selfie) VAGY szabad fájlválasztás,
+    ugyanazzal az egy vezérlővel (a böngésző natív választója adja a lehetőséget).
+    A kép négyzetre vágva, kicsire (256×256) skálázva kerül tárolásra base64-ként,
+    hogy a localStorage-t ne terhelje feleslegesen. */
+ const [avatarBusy, setAvatarBusy] = useState(false);
+ const onAvatarPick = e => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  setAvatarBusy(true);
+  const reader = new FileReader();
+  reader.onload = ev => {
+   const img = new Image();
+   img.onload = () => {
+    const size = 256;
+    const side = Math.min(img.width, img.height);
+    const sx = (img.width - side) / 2,
+     sy = (img.height - side) / 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+    setS(p => ({
+     ...p,
+     avatarPhoto: canvas.toDataURL('image/jpeg', 0.85)
+    }));
+    setAvatarBusy(false);
+   };
+   img.onerror = () => setAvatarBusy(false);
+   img.src = ev.target.result;
+  };
+  reader.onerror = () => setAvatarBusy(false);
+  reader.readAsDataURL(file);
+ };
  const u = window.bgU;
  /* megjelenített érték a választott egységben (a state mindig mmol/l) */
  const dispOf = v => {
@@ -9654,6 +9878,42 @@ function Settings({
       }),
       className: fi
      })
+    ),
+    /* v19.3 (Feature B): profilkép — spontán selfie a kamerával VAGY szabadon
+       választott kép a galériából/gépről, egyetlen vezérlővel */
+    h('div', null,
+     h('label', {
+      className: 'text-sm font-bold text-indigo-700 block mb-1'
+     }, t('Profilkép')),
+     h('div', {
+       className: 'flex items-center gap-3'
+      },
+      s.avatarPhoto ? h('img', {
+       src: s.avatarPhoto,
+       alt: t('Profilkép'),
+       className: 'w-14 h-14 rounded-full object-cover border-2 border-indigo-200'
+      }) : h('div', {
+       className: 'w-14 h-14 rounded-full bg-indigo-100 border-2 border-indigo-200 flex items-center justify-center text-2xl'
+      }, '🙂'),
+      h('label', {
+        className: 'px-3 py-2 rounded-xl text-sm font-bold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer'
+       },
+       avatarBusy ? t('Feldolgozás…') : '📷 ' + t('Fénykép választása'),
+       h('input', {
+        type: 'file',
+        accept: 'image/*',
+        onChange: onAvatarPick,
+        className: 'hidden'
+       })),
+      s.avatarPhoto && h('button', {
+       type: 'button',
+       onClick: () => setS({ ...s, avatarPhoto: null }),
+       className: 'text-xs font-bold text-red-500 hover:text-red-700'
+      }, '🗑️ ' + t('Törlés'))
+     ),
+     h('p', {
+      className: 'text-[11px] text-gray-400 mt-1'
+     }, t('Telefonon a fényképezőgép és a galéria közül is választhatsz — a böngésző saját választója ajánlja fel mindkettőt. A kép csak ezen a készüléken tárolódik.'))
     ),
     h('div', null,
      h('label', {
@@ -9900,73 +10160,102 @@ function Settings({
       k: 'featCHTable',
       icon: '📚',
       label: t('Beépített magyar CH-táblázat'),
-      desc: t('Több száz magyar étel az Ételek gyorsválasztó keresőjében, internet nélkül.')
+      desc: t('Több száz magyar étel az Ételek gyorsválasztó keresőjében, internet nélkül.'),
+      nav: { view: 'foods' }
      },
      {
       k: 'featAGP',
       icon: '📈',
       label: t('AGP nézet (percentilis sávok)'),
-      desc: t('Nemzetközi szabvány szerinti grafikon a Statisztika oldalon: medián + 50% és 90% sávok.')
+      desc: t('Nemzetközi szabvány szerinti grafikon a Statisztika oldalon: medián + 50% és 90% sávok.'),
+      nav: { view: 'stats' }
      },
      {
       k: 'featFatProt',
       icon: '🥓',
       label: t('Zsíros/fehérjedús étel jelölés'),
-      desc: t('Kapcsoló az étkezés bejegyzésben + figyelmeztetés az elnyújtott vércukor-emelkedésre.')
+      desc: t('Kapcsoló az étkezés bejegyzésben + figyelmeztetés az elnyújtott vércukor-emelkedésre.'),
+      nav: { view: 'add' }
      },
      {
       k: 'featBT',
       icon: '📶',
       label: t('Bluetooth vércukormérő kapcsolat'),
-      desc: t('Az utolsó mérés átvétele szabványos Bluetooth mérőből. Android + Chrome szükséges; iPhone-on nem támogatott.')
+      desc: t('Az utolsó mérés átvétele szabványos Bluetooth mérőből. Android + Chrome szükséges; iPhone-on nem támogatott.'),
+      nav: { view: 'add' }
      },
      {
       k: 'featPredLow',
       icon: '📉',
       label: t('Előrejelzett alacsony érték riasztás'),
       desc: t('A követő már azelőtt riasztást kap, hogy a CGM-érték a határ alá esne (trend-alapú előrejelzés).')
+      /* v19.3 (feladat 3): ehhez a kapcsolóhoz jelenleg nincs önálló, megnyitható
+         felület a kódban — nincs "Megnyitás" gomb, hogy ne mutasson hamis célra. */
      },
      {
       k: 'featMealRemind',
       icon: '⏰',
       label: t('Étkezés utáni mérési emlékeztető'),
-      desc: t('Beállítható idővel az étkezés után jelez az Áttekintésen, hogy ideje ellenőrző mérést végezni.')
+      desc: t('Beállítható idővel az étkezés után jelez az Áttekintésen, hogy ideje ellenőrző mérést végezni.'),
+      nav: { view: 'dashboard' }
      },
      {
       k: 'featSearch',
       icon: '🔍',
       label: t('Keresés a naplóban'),
-      desc: t('Szabad szavas keresés a Bejegyzések oldalon (pl. „pizza") — a teljes naplóban.')
+      desc: t('Szabad szavas keresés a Bejegyzések oldalon (pl. „pizza") — a teljes naplóban.'),
+      nav: { view: 'entries' }
      },
      {
       k: 'featWeekly',
       icon: '📬',
       label: t('Heti összefoglaló a követőnek'),
-      desc: t('A követő készülékén hetente egyszer rövid összesítő: TIR, átlag, hipók száma.')
+      desc: t('A követő készülékén hetente egyszer rövid összesítő: TIR, átlag, hipók száma.'),
+      nav: { view: 'dashboard' }
      },
      {
       k: 'featActivityProfiles',
       icon: '🌡️',
       label: t('Aktivitás/hőség profilok'),
-      desc: t('Szerkeszthető profilok (pl. kerti munka, meleg idő) a bólusjavaslat napszakonkénti %-os csökkentéséhez + extra CH emlékeztetőhöz. Beállítás: lentebb, külön kártyán.')
+      desc: t('Szerkeszthető profilok (pl. kerti munka, meleg idő) a bólusjavaslat napszakonkénti %-os csökkentéséhez + extra CH emlékeztetőhöz. Beállítás: lentebb, külön kártyán.'),
+      nav: { anchor: 'hbc-act-profiles-card' }
      }
     ].map(o => h('div', {
       key: o.k,
       className: 'p-3 rounded-xl border-2 ' + (s[o.k] !== false ? 'border-emerald-200 bg-emerald-50/50' : 'border-gray-200 bg-gray-50')
      },
-     h('label', {
-       className: 'flex items-center gap-2 text-sm font-bold text-gray-800'
+     h('div', {
+       className: 'flex items-center justify-between gap-2'
       },
-      h('input', {
-       type: 'checkbox',
-       checked: s[o.k] !== false,
-       onChange: e => setS({
-        ...s,
-        [o.k]: e.target.checked
+      h('label', {
+        className: 'flex items-center gap-2 text-sm font-bold text-gray-800 flex-1 min-w-0'
+       },
+       h('input', {
+        type: 'checkbox',
+        checked: s[o.k] !== false,
+        onChange: e => setS({
+         ...s,
+         [o.k]: e.target.checked
+        }),
+        className: 'w-5 h-5 accent-emerald-600 shrink-0'
        }),
-       className: 'w-5 h-5 accent-emerald-600'
-      }),
-      o.icon + ' ' + o.label),
+       h('span', {
+        className: 'truncate'
+       }, o.icon + ' ' + o.label)),
+      /* v19.3 (feladat 3): a kapcsoló ITT marad, a gomb csak elvisz a szolgáltatás
+         saját felületéhez, ahol ténylegesen látszik/használható */
+      o.nav && h('button', {
+       type: 'button',
+       onClick: () => {
+        if (o.nav.view) { onNavigate && onNavigate(o.nav.view); }
+        else if (o.nav.anchor) {
+         const el = document.getElementById(o.nav.anchor);
+         el && el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+       },
+       className: 'text-xs font-bold px-2 py-1 rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200 whitespace-nowrap shrink-0',
+       title: t('Ugrás a szolgáltatás felületéhez')
+      }, '↗️ ' + t('Megnyitás'))),
      h('p', {
       className: 'text-xs text-gray-500 mt-1 ml-7'
      }, o.desc),
@@ -10439,7 +10728,9 @@ function Settings({
   /* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — szabadon szerkeszthető preset-lista ═══
      Minden profil: név + reggel/délben/este bólus-csökkentés (%) + szabad
      szöveges "javasolt extra CH" emlékeztető. Alkalmazás: Új bejegyzésnél, a
-     bólus-kalkulátor kártyán (opcionális választó). */
+     bólus-kalkulátor kártyán (opcionális választó).
+     v19.3 (feladat 3): az "Új szolgáltatások" listából ide ugorhat a Felhasználó
+     a "Megnyitás" gombbal — innen az id-horgony (hbc-act-profiles-card). */
   card([
    h('h2', {
     className: 'font-black text-teal-700 mb-1'
@@ -10525,7 +10816,7 @@ function Settings({
      className: 'text-xs font-bold text-indigo-500 underline'
     }, '↩️ ' + t('Alapértelmezett profilok visszaállítása'))
    )
-  ]),
+  ], '', 'hbc-act-profiles-card'),
   /* v10.1: HASZNÁLATI ÚTMUTATÓ — magyar és angol PDF kézikönyv megnyitása/letöltése.
      Új lapon nyílik (asztalin böngésző PDF-néző, telefonon rendszer-megjelenítő);
      a ⬇ gomb azonnali mentés. Első megnyitás után a service worker cache-eli → offline is elérhető. */
@@ -10918,6 +11209,18 @@ function App() {
   localStorage.setItem('hbc-v5-settings', JSON.stringify(s));
   drivePush(entries, allFoods, s);
  };
+ /* v19.3 (feladat 1): az aktivitás/hőség visszatekintő elemzés kalibrációja
+    (időszak, perc-ablak) csendben mentődik, ugyanúgy mint az orvos-e-mail lista. */
+ const saveActAnalysisCfg = cfg => {
+  const s = {
+   ...settings,
+   ...cfg,
+   _mod: Date.now()
+  };
+  setSettings(s);
+  localStorage.setItem('hbc-v5-settings', JSON.stringify(s));
+  drivePush(entries, allFoods, s);
+ };
 
  const addEntry = e => {
   const arr = [{
@@ -11180,6 +11483,13 @@ function App() {
        if (e.key === 'Enter' || e.key === ' ') toggleDark();
       }
      }),
+     /* v19.3 (Feature B): profilkép a fejlécben, ha van — a Követő is látja
+        (effSettings: szinkronizált Tulajdonos-beállítások Követő módban) */
+     effSettings.avatarPhoto && h('img', {
+      src: effSettings.avatarPhoto,
+      alt: window.t('Profilkép'),
+      className: 'w-9 h-9 md:w-11 md:h-11 rounded-full object-cover border-2 border-indigo-200 shrink-0'
+     }),
      h('div', {
        className: 'min-w-0'
       },
@@ -11380,7 +11690,8 @@ function App() {
     settings: effSettings,
     /* v15: az orvos-címlista mindig a SAJÁT (helyi) settings-ből jön */
     docEmails: (settings && settings.doctorEmails) || [],
-    onSaveDocEmails: saveDocEmails
+    onSaveDocEmails: saveDocEmails,
+    onSaveActCfg: saveActAnalysisCfg
    }),
    view === 'foods' && h(FoodManager, {
     allFoods,
@@ -11403,7 +11714,10 @@ function App() {
    }),
    view === 'settings' && h(Settings, {
     settings,
-    onSave: saveSettings
+    onSave: saveSettings,
+    /* v19.3 (feladat 3): "Megnyitás" gomb az Új szolgáltatások listában — a
+       megfelelő oldalra navigál (a kapcsoló maga a listában marad) */
+    onNavigate: setView
    })
   ),
   // ═══ v8/v9: alsó navigációs sáv — csak mobilon, a leggyakoribb oldalak ═══

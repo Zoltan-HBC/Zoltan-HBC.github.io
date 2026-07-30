@@ -8,6 +8,35 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v19.3 kiegészítés (2026. július 30.)
+
+- **Kalibrálható visszatekintő elemzés:** az Aktivitás/hőség profilok
+  visszatekintő elemzésének vizsgált időszaka mostantól 1 napra is
+  lecsökkenthető (nem csak 7+ napra). Az app megmutatja, hány mérésből és
+  milyen időszak alapján számolt ("miből kalkulált"), és 3 szintű
+  megbízhatósági visszajelzést ad (kevés/korlátozott/elég adat). A "mérés
+  utáni" időablak (mettől-meddig számít egy érték az adott profilhoz tartozó
+  eredménynek) gyors preset-listából vagy egyénileg is beállítható és
+  megmarad a Beállításokban.
+- **Testsúly mező:** új, opcionális testsúly-mező az Új bejegyzésnél és a
+  Bejegyzés utólagos szerkesztésénél is. A legutóbb rögzített érték az
+  Áttekintés "Mai naplózási kör" csempéjén jelenik meg — asztalin a csík
+  alatt, mobilon a felirat-sorban jobbra igazítva, a csík fölött.
+- **"Megnyitás" gomb az Új szolgáltatásoknál:** a Beállítások "Új
+  szolgáltatások (v19)" listájában minden szolgáltatás neve mellett egy
+  gomb egyenesen a szolgáltatás saját felületére navigál — a ki-be kapcsoló
+  továbbra is a listában marad.
+- **Profilkép:** a Beállítások "Becenév" mezője mellett spontán fénykép
+  készíthető a kamerával, vagy tetszőleges kép választható a
+  galériából/gépről (egyetlen vezérlő kínálja fel mindkettőt). A kép csak a
+  készüléken tárolódik, kör alakban jelenik meg a Beállításokban és a
+  fejlécben is.
+- **Ikonok a Felhasználói kézikönyvben:** a korábban egyes rendszereken/PDF-
+  nézőkben kérdőjeles négyzetként megjelenő emoji-jelek helyett a kézikönyv
+  (HU/EN) most saját, éles képi ikonokat használ minden olyan helyen, ahol
+  vizuális útmutatást ad — ez minden Word-verzióban és PDF-nézőben
+  egységesen, helyesen jelenik meg.
+
 ## v19.2 kiegészítés (2026. július 29.)
 
 - **⏱️ "Egyéb tevékenység" kártya — -tól-ig a dátumsorban:** ha egy bejegyzés

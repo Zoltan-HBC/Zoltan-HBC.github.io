@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '19.6';
+const APP_VERSION = '20.0';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3475,7 +3475,7 @@ function carbEvents(e) {
  const groups = {};
  let timedSum = 0;
  timed.forEach(f => {
-  const c = (parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1);
+  const c = foodLineCH(f);
   timedSum += c;
   const ts = itemTS(e, f);
   groups[ts] = (groups[ts] || 0) + c;
@@ -3787,6 +3787,47 @@ function mealTimestampFromFoods(foods, baseTimestamp) {
  return String(baseTimestamp).slice(0, 10) + 'T' + minTime;
 }
 window.mealTimestampFromFoods = mealTimestampFromFoods;
+/* v20 (feladat 1): ha a bejegyzés fő időpontja utólag eltolódik — akár kézi
+   Időpont-módosítással, akár automatikusan (Étkezésnél az ételtételek
+   időpontja miatt, lásd mealTimestampFromFoods) — a vércukor mérésének és az
+   inzulin(ok) beadásának saját, addig hallgatólagosan a fő időponttal azonos
+   pillanata mostantól MINDIG megmarad, mintha a "Mérés/Beadás ideje eltér?"
+   kapcsolóval eddig is explicit módon rögzítve lett volna. Korábban ez a
+   mentés csak a kézi Időpont-mező módosításánál történt meg, és ott is csak a
+   vércukorra; az ételtétel-idő okozta automatikus eltolásnál (és az inzulin
+   idejénél mindkét esetben) hiányzott — pl. 7:30-kor mért vércukor + 8:00-kor
+   kezdett reggeli esetén a mérés 7:30-as időpontja korábban elveszett. */
+function preserveTimesOnShift(p, newTimestamp) {
+ if (!newTimestamp || newTimestamp === p.timestamp) return {};
+ const keep = (hasVal, timeField) => hasVal ? (p[timeField] || p.timestamp) : p[timeField];
+ return {
+  bloodGlucoseTime: keep(!!p.bloodGlucose, 'bloodGlucoseTime'),
+  insulinRapidTime: keep(!!p.insulinRapid, 'insulinRapidTime'),
+  insulinLongTime: keep(!!p.insulinLong, 'insulinLongTime')
+ };
+}
+window.preserveTimesOnShift = preserveTimesOnShift;
+/* v20 (feladat 4): egy tábla-tétel "unit" mezőjéből (pl. "1 vékony szelet (30 g)")
+   megpróbálja kiolvasni a tipikus grammértéket — ez csak a gramm mező kiinduló
+   előtöltéséhez kell, a tényleges gramm mennyiség mindig szabadon felülírható. */
+function parseGramsFromUnit(unit) {
+ if (!unit) return null;
+ const m = String(unit).match(/(\d+(?:[.,]\d+)?)\s*g\b/i);
+ return m ? parseFloat(m[1].replace(',', '.')) : null;
+}
+window.parseGramsFromUnit = parseGramsFromUnit;
+/* v20 (feladat 4): egy ételsor végleges CH(g) értéke — elsődlegesen a
+   közvetlenül megadott/korrigált carbsFinal (szabad gramm+CH modell).
+   Visszafelé kompatibilis: ha egy régi, még a szorzós modellel mentett
+   bejegyzésen csak "mult" szerepel, abból számol (carbs × mult). */
+function foodLineCH(f) {
+ if (!f) return 0;
+ if (f.carbsFinal != null && f.carbsFinal !== '') return parseFloat(f.carbsFinal) || 0;
+ const base = parseFloat(f.carbs) || 0;
+ const mult = f.mult != null ? (parseFloat(f.mult) || 1) : 1;
+ return base * mult;
+}
+window.foodLineCH = foodLineCH;
 
 /* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — megosztott segédfüggvények (AddEntry + EditModal) ═══
    A hőmérséklet-lekérdezés SOHA nem automatikus/háttérfolyamat — csak a felhasználó
@@ -6890,6 +6931,11 @@ function ActivityFields({
  settings
 }) {
  const names = activityNames(entries);
+ /* v20 (feladat 3): kereshető tevékenység-választó — az Ételek (gyorsválasztó)
+    mintája szerint: keresőmező + élő szűrt, kattintható lista a korábbi
+    tevékenységekből, sok elem esetén is gyors választás. */
+ const [aSearch, setASearch] = useState('');
+ const namesShown = names.filter(n => n.toLowerCase().includes(aSearch.toLowerCase()));
  const cur = (form.activity || '').split(',').map(x => x.trim()).filter(Boolean);
  const addName = n => {
   n = (n || '').trim();
@@ -6943,21 +6989,32 @@ function ActivityFields({
    h('label', {
     className: 'text-sm font-bold text-yellow-800 block mb-1'
    }, '🏃 ' + window.t('Tevékenység (választás a korábbiakból)')),
-   names.length > 0 && h('select', {
-     value: '',
-     onChange: e => {
-      addName(e.target.value);
-      e.target.value = '';
-     },
-     className: 'w-full border-2 border-yellow-300 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none bg-white'
+   /* v20 (feladat 3): a korábbi egyszerű <select> helyett kereshető lista —
+      sok korábbi tevékenység esetén a beírt szöveg szűkíti a találatokat,
+      egy kattintással hozzáadható a bejegyzéshez. */
+   names.length > 0 && h('div', {
+     className: 'mb-2'
     },
-    h('option', {
-     value: ''
-    }, '➕ ' + window.t('Válassz korábbi tevékenységet...')),
-    names.map(n => h('option', {
-     key: n,
-     value: n
-    }, n))
+    h('input', {
+     type: 'text',
+     value: aSearch,
+     onChange: e => setASearch(e.target.value),
+     placeholder: '🔍 ' + window.t('Keresés a korábbi tevékenységek közt...'),
+     className: 'w-full border-2 border-yellow-300 rounded-xl px-3 py-2 text-sm mb-1 focus:outline-none bg-white'
+    }),
+    h('div', {
+      className: 'max-h-40 overflow-y-auto space-y-1 bg-white rounded-xl border border-yellow-200 p-1'
+     },
+     namesShown.length === 0 ? h('p', {
+      className: 'text-[11px] text-gray-400 px-2 py-1'
+     }, window.t('Nincs találat.')) :
+     namesShown.map(n => h('button', {
+      type: 'button',
+      key: n,
+      onClick: () => addName(n),
+      className: 'w-full text-left px-2 py-1 rounded-lg text-xs font-bold text-yellow-800 hover:bg-yellow-100' + (cur.includes(n) ? ' opacity-40' : '')
+     }, (cur.includes(n) ? '✓ ' : '➕ ') + n))
+    )
    ),
    h('input', {
     type: 'text',
@@ -7138,30 +7195,49 @@ function AddEntry({
  /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
     Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
  const addFoodToForm = (f, mult = 1) => setForm(p => {
+  /* v20 (feladat 4): a szorzó helyett az ételsor mostantól közvetlenül
+     szerkeszthető gramm + CH(g) párral kerül a bejegyzésbe — az alap
+     táblázat-értékek (unit-ban szereplő tipikus gramm, ha kiolvasható, és a
+     tétel CH-ja) csak KIINDULÓ előtöltésként szolgálnak, bármikor felülírhatók. */
+  const baseG = parseGramsFromUnit(f.unit);
   const foods = [...p.foods, {
    ...f,
    fid: Date.now(),
-   mult
+   grams: baseG != null ? baseG * mult : null,
+   carbsFinal: (parseFloat(f.carbs) || 0) * mult
   }];
+  const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
    ...p,
    foods,
-   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+   timestamp: newTs,
+   ...preserveTimesOnShift(p, newTs)
   };
  });
  const removeFood = fid => setForm(p => {
   const foods = p.foods.filter(f => f.fid !== fid);
+  const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
    ...p,
    foods,
-   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+   timestamp: newTs,
+   ...preserveTimesOnShift(p, newTs)
   };
  });
- const setMult = (fid, mult) => setForm(p => ({
+ /* v20 (feladat 4): soronkénti gramm és CH(g) szabad, egymástól független
+    szerkesztése (a korábbi 1–10-es egész szorzó megszűnt) */
+ const setFoodGrams = (fid, grams) => setForm(p => ({
   ...p,
   foods: p.foods.map(f => f.fid === fid ? {
    ...f,
-   mult
+   grams: grams === '' ? null : parseFloat(grams)
+  } : f)
+ }));
+ const setFoodCarbs = (fid, carbsFinal) => setForm(p => ({
+  ...p,
+  foods: p.foods.map(f => f.fid === fid ? {
+   ...f,
+   carbsFinal: carbsFinal === '' ? null : parseFloat(carbsFinal)
   } : f)
  }));
  /* v18.4: tételenkénti CH-időpont ("ÓÓ:PP"); ha a bejegyzés idejével azonos, töröljük */
@@ -7170,13 +7246,15 @@ function AddEntry({
    ...f,
    itemTime: (tm && tm !== String(p.timestamp || '').slice(11, 16)) ? tm : null
   } : f);
+  const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
    ...p,
    foods,
-   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+   timestamp: newTs,
+   ...preserveTimesOnShift(p, newTs)
   };
  });
- const foodCH = form.foods.reduce((s, f) => s + f.carbs * f.mult, 0);
+ const foodCH = form.foods.reduce((s, f) => s + foodLineCH(f), 0);
  const extraCH = parseFloat(form.carbs) || 0;
  const totalCH = foodCH + extraCH;
 
@@ -7238,7 +7316,9 @@ function AddEntry({
   const doSave = () => onSave({
    ...form,
    carbs: _hasCH ? (totalCH || null) : null,
-   foods: _hasCH ? form.foods : [],
+   /* v20 (feladat 4 — kódtisztítás): a megszűnt "mult" mező nem kerül ki mentésre,
+      csak a szabad grams/carbsFinal pár */
+   foods: _hasCH ? form.foods.map(({ mult, ...rest }) => rest) : [],
    fatProt: _hasCH ? !!form.fatProt : false, /* v18 (6.3) */
    mealType: form.type === 'Étkezés' ? form.mealType : '',
    bloodGlucose: _mmol,
@@ -7257,7 +7337,7 @@ function AddEntry({
    activityFrom: (_hasAct && form.activityFrom) ? form.activityFrom : null,
    activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
-   private: _isAct ? !!form.private : false, /* v14: privát CSAK Egyéb tevékenységnél */
+   private: !!form.private, /* v20 (feladat 2): privát MINDEN bejegyzés-típusnál */
    /* v19: aktivitás/hőség profil — csak a CH-alapú bólusnál értelmezett; a
       ténylegesen alkalmazott % MENTÉSKOR rögzül (a profil későbbi szerkesztése/
       törlése a már mentett bejegyzést nem módosítja visszamenőleg). */
@@ -7306,7 +7386,7 @@ function AddEntry({
       onChange: e => setForm(p => ({
        ...p,
        timestamp: e.target.value,
-       bloodGlucoseTime: p.bloodGlucose ? (p.bloodGlucoseTime || p.timestamp) : p.bloodGlucoseTime
+       ...preserveTimesOnShift(p, e.target.value)
       })),
       required: true,
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
@@ -7585,7 +7665,7 @@ function AddEntry({
        className: 'text-xs font-bold text-gray-800'
       }, f.name), h('p', {
        className: 'text-xs text-gray-500'
-      }, `${fmtCH(f.carbs)}g × ${f.mult} = ${fmtCH(f.carbs*f.mult)}g CH`)),
+      }, window.t('alap') + ': ' + fmtCH(f.carbs) + 'g CH' + (f.unit ? ' / ' + f.unit : ''))),
       h('div', {
         className: 'hbc-fooditem-ctrls'
        },
@@ -7597,16 +7677,29 @@ function AddEntry({
         title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
         className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
        }),
-       h('select', {
-         value: f.mult,
-         onChange: e => setMult(f.fid, parseInt(e.target.value)),
-         className: 'border rounded-lg px-1 py-1 text-xs'
-        },
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => h('option', {
-         key: n,
-         value: n
-        }, `${n}×`))
-       ),
+       /* v20 (feladat 4): szabad gramm + CH(g) pár a szorzó helyett — az alapérték
+          csak kiinduló előtöltés, bármikor a ténylegesen elfogyasztott
+          mennyiségre/CH-ra korrigálható (pl. fél adag esetén). */
+       h('input', {
+        type: 'number',
+        step: '1',
+        min: '0',
+        value: f.grams != null ? f.grams : '',
+        onChange: e => setFoodGrams(f.fid, e.target.value),
+        placeholder: 'g',
+        title: window.t('Ténylegesen elfogyasztott mennyiség (gramm) — szabadon korrigálható'),
+        className: 'border rounded-lg px-1 py-1 text-xs w-14'
+       }),
+       h('input', {
+        type: 'number',
+        step: '0.1',
+        min: '0',
+        value: f.carbsFinal != null ? f.carbsFinal : '',
+        onChange: e => setFoodCarbs(f.fid, e.target.value),
+        placeholder: 'CH',
+        title: window.t('Ennek a tételnek a szénhidráttartalma (gramm) — szabadon korrigálható'),
+        className: 'border rounded-lg px-1 py-1 text-xs w-14 font-bold text-indigo-700'
+       }),
        h('button', {
         type: 'button',
         onClick: () => removeFood(f.fid),
@@ -7836,9 +7929,10 @@ function AddEntry({
     })
    ),
 
-   /* v14: PRIVÁT bejegyzés — CSAK Egyéb tevékenységnél állítható;
-      csak a Tulajdonos látja, a Követőhöz el sem jut */
-   form.type === 'Egyéb tevékenység' && h('label', {
+   /* v20 (feladat 2): PRIVÁT bejegyzés — mostantól MINDEN bejegyzés-típusnál
+      állítható (korábban csak Egyéb tevékenységnél); csak a Tulajdonos látja,
+      a Követőhöz el sem jut */
+   h('label', {
      className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
     },
     h('input', {
@@ -7950,8 +8044,8 @@ function ViewEntryModal({
       foods.map((f, i) => h('p', {
        key: i,
        className: 'text-sm text-gray-800 font-semibold pl-2'
-      }, '• ' + f.name + ' — ' + fmtCH(parseFloat(f.carbs) || 0) + 'g × ' + (parseFloat(f.mult) || 1) + ' = ' + fmtCH((parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1)) + 'g CH' +
-     (f.itemTime ? ' · ⏱️ ' + f.itemTime : ''))) /* v18.4: tétel saját időpontja */
+      }, '• ' + f.name + ' — ' + (f.grams != null && f.grams !== '' ? fmtCH(f.grams) + 'g · ' : '') + fmtCH(foodLineCH(f)) + 'g CH' +
+     (f.itemTime ? ' · ⏱️ ' + f.itemTime : ''))) /* v18.4: tétel saját időpontja; v20: gramm+CH közvetlenül */
      ),
      entry.carbs > 0 && row('🍽️', 'TELJES CH', fmtCH(entry.carbs) + ' g'),
     entry.fatProt && row('🥓', window.t('Zsíros, fehérjedús étel'), window.t('elnyújtott felszívódás — 2–3 óra múlva ellenőrző mérés javasolt')), /* v18 (6.3) */
@@ -8004,12 +8098,21 @@ function EditModal({
     A tárolt carbs = ételek CH-ja + extra CH; megnyitáskor szétbontjuk, mentéskor
     újra összeadjuk, így a CH mindig pontos marad. */
  const [form, setForm] = useState(() => {
-  const fds = (Array.isArray(entry.foods) ? entry.foods : []).map((f, i) => ({
-   ...f,
-   fid: f.fid || i + 1,
-   mult: parseFloat(f.mult) || 1
-  }));
-  const fCH = fds.reduce((s, f) => s + (parseFloat(f.carbs) || 0) * f.mult, 0);
+  /* v20 (feladat 4): régi, még az 1–10-es egész szorzóval mentett tételek
+     migrálása szabad gramm+CH modellre — ha a tételen már van explicit
+     grams/carbsFinal, az marad; egyébként a korábbi mult alapján számolt
+     kiinduló érték kerül be, ami innentől szabadon korrigálható. */
+  const fds = (Array.isArray(entry.foods) ? entry.foods : []).map((f, i) => {
+   const mult = parseFloat(f.mult) || 1;
+   const baseG = parseGramsFromUnit(f.unit);
+   return {
+    ...f,
+    fid: f.fid || i + 1,
+    grams: f.grams != null ? f.grams : (baseG != null ? baseG * mult : null),
+    carbsFinal: f.carbsFinal != null ? f.carbsFinal : (parseFloat(f.carbs) || 0) * mult
+   };
+  });
+  const fCH = fds.reduce((s, f) => s + foodLineCH(f), 0);
   const extra = Math.max(0, (parseFloat(entry.carbs) || 0) - fCH);
   return {
    ...entry,
@@ -8033,6 +8136,10 @@ function EditModal({
  });
  const [showPicker, setShowPicker] = useState(false);
  const [fSearch, setFSearch] = useState('');
+ /* v20 (feladat 5): aktivitás/hőség profil + hőmérséklet-lekérdezés utólagos
+    szerkesztéshez (korábban csak Új bejegyzésnél volt elérhető) */
+ const [weatherBusy, setWeatherBusy] = useState(false);
+ const [weatherErr, setWeatherErr] = useState('');
  const shownFoods = (allFoods || []).filter(f => f.name.toLowerCase().includes(fSearch.toLowerCase()));
  /* v18.7 FIX (feladat 3): a beépített magyar CH-táblázat (205 tétel) az Új
     bejegyzésnél már böngészhető volt, de az Edit-modalból (Bejegyzés
@@ -8048,30 +8155,48 @@ function EditModal({
  /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
     Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
  const addFoodToForm = (f, mult = 1) => setForm(p => {
+  /* v20 (feladat 4): l. AddEntry azonos nevű függvényének megjegyzését —
+     mostantól szabad gramm + CH(g) pár kerül a sorra, nem szorzó. */
+  const baseG = parseGramsFromUnit(f.unit);
   const foods = [...(p.foods || []), {
    ...f,
    fid: Date.now(),
-   mult
+   grams: baseG != null ? baseG * mult : null,
+   carbsFinal: (parseFloat(f.carbs) || 0) * mult
   }];
+  const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
    ...p,
    foods,
-   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+   timestamp: newTs,
+   ...preserveTimesOnShift(p, newTs)
   };
  });
  const removeFood = fid => setForm(p => {
   const foods = (p.foods || []).filter(x => x.fid !== fid);
+  const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
    ...p,
    foods,
-   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+   timestamp: newTs,
+   ...preserveTimesOnShift(p, newTs)
   };
  });
- const setMult = (fid, mult) => setForm(p => ({
+ /* v20 (feladat 4): soronkénti gramm és CH(g) szabad, egymástól független
+    szerkesztése (a korábbi 1–10-es egész szorzó megszűnt) — utólagos
+    szerkesztésnél (EditModal) is elérhető, nem csak felviteltnél. */
+ const setFoodGrams = (fid, grams) => setForm(p => ({
   ...p,
   foods: (p.foods || []).map(x => x.fid === fid ? {
    ...x,
-   mult
+   grams: grams === '' ? null : parseFloat(grams)
+  } : x)
+ }));
+ const setFoodCarbs = (fid, carbsFinal) => setForm(p => ({
+  ...p,
+  foods: (p.foods || []).map(x => x.fid === fid ? {
+   ...x,
+   carbsFinal: carbsFinal === '' ? null : parseFloat(carbsFinal)
   } : x)
  }));
  /* v18.4: tételenkénti CH-időpont utólagos szerkesztésnél is */
@@ -8080,13 +8205,15 @@ function EditModal({
    ...x,
    itemTime: (tm && tm !== String(p.timestamp || '').slice(11, 16)) ? tm : null
   } : x);
+  const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
    ...p,
    foods,
-   timestamp: p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp
+   timestamp: newTs,
+   ...preserveTimesOnShift(p, newTs)
   };
  });
- const foodCH = (form.foods || []).reduce((s, f) => s + (parseFloat(f.carbs) || 0) * (parseFloat(f.mult) || 1), 0);
+ const foodCH = (form.foods || []).reduce((s, f) => s + foodLineCH(f), 0);
  const totalCH = foodCH + (parseFloat(form.carbs) || 0);
  /* v14: az utólagos szerkesztés mezői PONTOSAN a típusnak megfelelően jelennek meg —
     ugyanúgy, mint az Új bejegyzés űrlapon */
@@ -8096,13 +8223,24 @@ function EditModal({
  const _hasCH = form.type === 'Étkezés' || form.type === 'Kontroll';
  const showFoodEd = _hasCH || foodCH > 0;
  const showLong = form.type === 'Lantus'; /* v17: Étkezésnél nincs Lantus-mező */
+ /* v20 (feladat 5): aktivitás/hőség profil — l. AddEntry azonos számítását;
+    itt utólagos szerkesztéshez kell (a profil/hőmérséklet korábban csak
+    létrehozáskor volt rögzíthető). */
+ const actProfilesOn = !settings || settings.featActivityProfiles !== false;
+ const actProfiles = (actProfilesOn && Array.isArray(settings && settings.activityProfiles) && settings.activityProfiles.length) ?
+  settings.activityProfiles : (actProfilesOn ? ACTIVITY_PROFILE_DEFAULTS : []);
+ const actProfile = actProfilesOn ? actProfiles.find(p => p.id === form.activityProfileId) : null;
+ const actDaypartKey = actProfileDaypartKey(form.timestamp, settings);
+ const actPct = actProfile ? (parseFloat(actProfile[actDaypartKey]) || 0) : 0;
  const submit = e => {
   e.preventDefault();
   const _mmol = form.bloodGlucose !== '' && form.bloodGlucose != null ? window.bgU.toMmol(form.bloodGlucose) : null;
   const doSave = () => onSave({
    ...form,
    carbs: (showFoodEd && totalCH) ? totalCH : null,
-   foods: showFoodEd ? (form.foods || []) : [],
+   /* v20 (feladat 4 — kódtisztítás): a megszűnt "mult" mező nem kerül ki mentésre,
+      csak a szabad grams/carbsFinal pár */
+   foods: showFoodEd ? (form.foods || []).map(({ mult, ...rest }) => rest) : [],
    fatProt: showFoodEd ? !!form.fatProt : false, /* v18 (6.3) */
    mealType: form.type === 'Étkezés' ? (form.mealType || '') : '',
    bloodGlucose: _mmol,
@@ -8121,9 +8259,17 @@ function EditModal({
    activityFrom: (_hasAct && form.activityFrom) ? form.activityFrom : null,
    activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
-   private: _isAct ? !!form.private : false, /* v14: privát CSAK Egyéb tevékenységnél */
+   private: !!form.private, /* v20 (feladat 2): privát MINDEN bejegyzés-típusnál */
    /* v19.3 (feladat 2): testsúly — bármely bejegyzéstípusnál rögzíthető/szerkeszthető */
-   weight: (form.weight !== '' && form.weight != null) ? parseFloat(form.weight) : null
+   weight: (form.weight !== '' && form.weight != null) ? parseFloat(form.weight) : null,
+   /* v20 (feladat 5): aktivitás/hőség profil + hőmérséklet utólag is szerkeszthető —
+      a ténylegesen alkalmazott % a MENTÉSKOR (itt: a szerkesztés lezárásakor)
+      újraszámolva rögzül, ugyanúgy, mint Új bejegyzésnél */
+   activityProfileId: (showFoodEd && totalCH > 0 && form.activityProfileId) ? form.activityProfileId : '',
+   activityProfileName: (showFoodEd && totalCH > 0 && form.activityProfileId && actProfile) ? actProfile.name : '',
+   activityProfilePct: (showFoodEd && totalCH > 0 && form.activityProfileId) ? actPct : null,
+   weatherTemp: (showFoodEd && totalCH > 0 && form.weatherTemp !== '' && form.weatherTemp != null) ? parseFloat(form.weatherTemp) : null,
+   weatherSource: (showFoodEd && totalCH > 0 && form.weatherTemp !== '' && form.weatherTemp != null) ? (form.weatherSource || 'manual') : null
   });
   /* v8: extrém érték — megerősítő kérdés mentés előtt */
   const warn = extremeBGWarn(_mmol);
@@ -8180,7 +8326,7 @@ function EditModal({
       onChange: e => setForm(p => ({
        ...p,
        timestamp: e.target.value,
-       bloodGlucoseTime: p.bloodGlucose ? (p.bloodGlucoseTime || p.timestamp) : p.bloodGlucoseTime
+       ...preserveTimesOnShift(p, e.target.value)
       })),
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      })),
@@ -8365,7 +8511,7 @@ function EditModal({
          className: 'text-xs font-bold text-gray-800'
         }, f.name), h('p', {
          className: 'text-xs text-gray-500'
-        }, `${f.carbs}g × ${f.mult} = ${fmtCH((parseFloat(f.carbs)||0)*(parseFloat(f.mult)||1))}g CH`)),
+        }, window.t('alap') + ': ' + fmtCH(f.carbs) + 'g CH' + (f.unit ? ' / ' + f.unit : ''))),
         h('div', {
           className: 'hbc-fooditem-ctrls'
          },
@@ -8377,16 +8523,29 @@ function EditModal({
           title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
           className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
          }),
-         h('select', {
-           value: f.mult,
-           onChange: e => setMult(f.fid, parseInt(e.target.value)),
-           className: 'border rounded-lg px-1 py-1 text-xs'
-          },
-          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => h('option', {
-           key: n,
-           value: n
-          }, `${n}×`))
-         ),
+         /* v20 (feladat 4): szabad gramm + CH(g) pár a szorzó helyett, utólagos
+            szerkesztésnél is — bármikor a ténylegesen elfogyasztott
+            mennyiségre/CH-ra korrigálható (pl. fél adag esetén). */
+         h('input', {
+          type: 'number',
+          step: '1',
+          min: '0',
+          value: f.grams != null ? f.grams : '',
+          onChange: e => setFoodGrams(f.fid, e.target.value),
+          placeholder: 'g',
+          title: window.t('Ténylegesen elfogyasztott mennyiség (gramm) — szabadon korrigálható'),
+          className: 'border rounded-lg px-1 py-1 text-xs w-14'
+         }),
+         h('input', {
+          type: 'number',
+          step: '0.1',
+          min: '0',
+          value: f.carbsFinal != null ? f.carbsFinal : '',
+          onChange: e => setFoodCarbs(f.fid, e.target.value),
+          placeholder: 'CH',
+          title: window.t('Ennek a tételnek a szénhidráttartalma (gramm) — szabadon korrigálható'),
+          className: 'border rounded-lg px-1 py-1 text-xs w-14 font-bold text-indigo-700'
+         }),
          h('button', {
           type: 'button',
           onClick: () => removeFood(f.fid),
@@ -8427,6 +8586,56 @@ function EditModal({
        className: 'w-5 h-5 accent-amber-600'
       }),
       '🥓 ' + window.t('Zsíros, fehérjedús étel'))),
+    /* v20 (feladat 5): aktivitás/hőség profil + hőmérséklet — utólag is
+       szerkeszthető (korábban csak Új bejegyzésnél lehetett beállítani) */
+    showFoodEd && actProfilesOn && actProfiles.length > 0 && h('div', {
+      className: 'mb-2 p-2 bg-purple-50 rounded-xl border border-purple-200'
+     },
+     h('label', {
+       className: 'text-xs font-bold text-purple-700 block mb-1'
+      }, '🌡️ ' + window.t('Aktivitás/hőség profil (opcionális)')),
+     h('select', {
+       value: form.activityProfileId || '',
+       onChange: e => setForm(p => ({ ...p, activityProfileId: e.target.value })),
+       className: 'w-full border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400 mb-2'
+      },
+      h('option', { value: '' }, window.t('Nincs (alap)')),
+      actProfiles.map(pf => h('option', { key: pf.id, value: pf.id }, pf.name))
+     ),
+     h('div', { className: 'flex items-center gap-2' },
+      h('input', {
+       type: 'number',
+       step: '0.1',
+       value: form.weatherTemp != null ? form.weatherTemp : '',
+       placeholder: '°C',
+       onChange: e => setForm(p => ({ ...p, weatherTemp: e.target.value, weatherSource: 'manual' })),
+       className: 'w-24 border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400'
+      }),
+      h('button', {
+       type: 'button',
+       disabled: weatherBusy,
+       onClick: () => {
+        setWeatherErr('');
+        setWeatherBusy(true);
+        fetchDeviceWeather(
+         temp => { setWeatherBusy(false); setForm(p => ({ ...p, weatherTemp: String(temp), weatherSource: 'auto' })); },
+         msg => { setWeatherBusy(false); setWeatherErr(msg); }
+        );
+       },
+       className: 'text-xs font-bold px-2 py-1.5 rounded-xl bg-purple-100 text-purple-700 disabled:opacity-50'
+      }, weatherBusy ? '⏳ ' + window.t('Lekérdezés…') : '📍 ' + window.t('Lekérdezés'))
+     ),
+     weatherErr && h('p', { className: 'text-xs text-red-500 mt-1' }, '⚠️ ' + window.t(weatherErr)),
+     actProfile && actPct !== 0 && h('p', {
+      className: 'text-xs font-bold text-purple-700 mt-2'
+     }, `${actPct > 0 ? '+' : ''}${actPct}% ${window.t('korrigálva')}: ${actProfile.name}` + (form.weatherTemp !== '' && form.weatherTemp != null ? ` (${form.weatherTemp}°C)` : '')),
+     actProfile && actProfile.extraCH && h('p', {
+      className: 'text-xs text-amber-700 mt-1 p-2 bg-amber-50 rounded-xl border border-amber-200'
+     }, '🍭 ' + window.t('Javasolt extra CH') + ': ' + actProfile.extraCH),
+     h('p', {
+      className: 'text-[10px] text-gray-400 mt-1'
+     }, window.t('A módosítás csak ezt a bejegyzést érinti — a bólusjavaslat a felviteli pillanatban rögzült, azt ez a korrekció nem számolja újra.'))
+    ),
     /* v14: az inzulinmezők a TÍPUSNAK megfelelően — mint az Új bejegyzésnél */
     (!_noRapid || showLong) && h('div', {
       className: 'grid grid-cols-2 gap-3'
@@ -8519,9 +8728,10 @@ function EditModal({
       rows: 3,
       className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
      })),
-    /* v14: PRIVÁT bejegyzés — CSAK Egyéb tevékenységnél állítható;
-       csak a Tulajdonos látja, a Követőhöz el sem jut */
-    _isAct && h('label', {
+    /* v20 (feladat 2): PRIVÁT bejegyzés — mostantól MINDEN bejegyzés-típusnál
+       állítható (korábban csak Egyéb tevékenységnél); csak a Tulajdonos
+       látja, a Követőhöz el sem jut */
+    h('label', {
       className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
      },
      h('input', {

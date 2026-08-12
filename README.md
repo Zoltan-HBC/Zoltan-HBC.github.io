@@ -1,4 +1,4 @@
-# HBC Diabétesz Napló v19 Personal APP
+# HBC Diabétesz Napló v20 Personal APP
 
 Telepíthető, offline is működő diabétesz napló inzulinnal kezelt cukorbetegeknek.
 Telefonra, tabletre, laptopra és asztali gépre (PWA).
@@ -7,6 +7,43 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 1. **TELEPITESI_UTMUTATO.md** — közzététel (GitHub Pages, ingyenes) + telepítés minden eszközre
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
+
+## v20.0 korrekció (2026. augusztus 12.)
+
+- **⏰ Mérés eltolódási hiba javítva:** ha egy Étkezés bejegyzés fő időpontja
+  utólag automatikusan a legkorábbi ételtétel-időponthoz igazodott (pl.
+  7:30-kor mért vércukor, majd 8:00-kor kezdett reggeli esetén a bejegyzés
+  ideje 8:00-ra vált), a vércukor mérésének (és az inzulin beadásának) eredeti
+  pillanata korábban ilyenkor elveszett — mostantól mindig megmarad és
+  látszik a "Bejegyzések" kártyáin, a részletnézetben, a PDF orvosi
+  riportban és a CSV-exportban is (ugyanúgy, mint a kézi Időpont-mező
+  módosításánál eddig is).
+- **🔒 Privát bejegyzés minden típusnál:** a korábban csak "Egyéb
+  tevékenység"-nél elérhető "Privát bejegyzés" kapcsoló mostantól Étkezés,
+  Kontroll és Lantus bejegyzéseknél is beállítható — a Követő ezeket sem
+  látja.
+- **🔍 Kereshető tevékenység-választó:** a "Válassz korábbi tevékenységet…"
+  egyszerű legördülője helyett kereső mező + élő szűrt, kattintható lista —
+  sok korábbi tevékenység esetén is gyors a választás, az Ételek
+  gyorsválasztójával megegyező működéssel.
+- **⚖️ Egyedi gramm/CH ételsoronként:** a bejegyzésbe felvett ételek eddigi
+  1–10-es egész szorzója helyett minden ételsornál szabadon megadható/
+  korrigálható a ténylegesen elfogyasztott mennyiség (g) ÉS a hozzá tartozó
+  szénhidrát (g CH) — felviteltnél és utólagos szerkesztésnél egyaránt (pl.
+  "Rizs (1 adag 125 g) 50,0 g CH", ha csak a fele fogy el, 62 g / 25,0 g CH
+  írható be). A beépített CH-táblázat és a saját Ételek alapértékei
+  továbbra is külön, tartósan is szerkeszthetők (Ételek oldal).
+- **✏️ Aktivitás/hőség profil utólag is szerkeszthető:** a felviteltnél
+  választható profil és hőmérséklet eddig utólag nem volt módosítható —
+  mostantól a Bejegyzés szerkesztésében is elérhető, azonos működéssel
+  (profil-választó, hőmérséklet kézi vagy 📍 lekérdezéssel).
+- **📊 Statisztika — megerősítve:** a Statisztika mindig az aktuális,
+  korrigált bejegyzés-adatokat használja; a CGM-import (ha van ilyen
+  eszközöd) továbbra is teljesen külön adattárban marad, a kézi korrekciók
+  nem érintik.
+- **🧹 Kódtisztítás:** az ételsorok megszűnt szorzó-mezője (mult) törölve;
+  régi, még szorzóval mentett bejegyzések automatikusan, veszteség nélkül
+  jelennek meg az új gramm/CH modellben.
 
 ## v19.6 korrekció (2026. július 30.)
 

@@ -4631,7 +4631,11 @@ function Dashboard({
     }, '➕ Első mai bejegyzés rögzítése')) :
    h('div', {
     className: 'space-y-2'
-   }, todayEs.map(e => h(EntryCard, {
+    /* v20 (finomítás): a lista a Bejegyzések oldallal egyezően a legutóbbi
+       bejegyzést mutatja először — a todayEs maga (időrendben növekvő)
+       változatlan marad, mert a fenti számításokat (pl. az étkezés utáni
+       mérési emlékeztető "utolsó étkezés" logikáját) ez használja. */
+   }, [...todayEs].reverse().map(e => h(EntryCard, {
     key: e.id,
     entry: e,
     onEdit,

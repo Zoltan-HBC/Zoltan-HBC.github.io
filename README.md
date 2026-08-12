@@ -44,6 +44,10 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 - **🧹 Kódtisztítás:** az ételsorok megszűnt szorzó-mezője (mult) törölve;
   régi, még szorzóval mentett bejegyzések automatikusan, veszteség nélkül
   jelennek meg az új gramm/CH modellben.
+- **📅 Áttekintés — legutóbbi bejegyzés elöl (finomítás):** a "Mai
+  bejegyzések" lista az Áttekintés oldalon mostantól a legutóbbi bejegyzést
+  mutatja először, ugyanúgy, mint a Bejegyzések/Napló oldal listája
+  (korábban időrendben, a legkorábbival kezdődött).
 
 ## v19.6 korrekció (2026. július 30.)
 

@@ -8,6 +8,38 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v20.1 korrekció (2026. augusztus 14.)
+
+- **📍 Hőmérséklet automatikus lekérdezése:** az Aktivitás/hőség blokk
+  megjelenésekor a hőmérséklet mostantól alapból automatikusan lekérdezésre
+  kerül (a készülék helye alapján) — a Beállításokban egy jelölőnégyzettel
+  kikapcsolható, ekkor a korábbi, kézi "📍 Lekérdezés" gombos működés marad.
+  Sikertelen/megtagadott lekérdezés esetén továbbra is kézzel megadható.
+- **⚖️ Ételsorok — Súly (g) + CH/100g:** a kiválasztott ételek beírómezői
+  újragondolva: Idő | Súly (g) | CH/100g | Törlés. A tétel végleges
+  szénhidráttartalma (g CH) ezekből számolt, megjelenített érték — nem külön
+  szerkeszthető mező. A CH/100g mező ott töltődik ki előre, ahol az
+  adatbázis-tételből ismert a tipikus grammsúly; egyébként a csomagolás/
+  tápértéktáblázat alapján adható meg. Régi bejegyzések automatikusan,
+  veszteség nélkül jelennek meg az új modellben.
+- **🏃 Tevékenység-választó — alapból összecsukva:** a "Tevékenység (választás
+  a korábbiakból)" kereshető lista mostantól alapból zárt állapotban jelenik
+  meg, kattintásra nyílik — kevesebb helyet foglal az űrlapon.
+- **🌡️ Bázisinzulin aktív mennyisége (Lantus és társai):** új, tájékoztató
+  jellegű becslés a bázisinzulin (Lantus/Abasaglar/Semglee/Toujeo/Tresiba/
+  Levemir/Insulatard/Humulin N) aktív mennyiségéről, a gyártói hivatalos
+  hatásidő-adatok alapján (típusonként eltérő hatástartam és lecsengési
+  görbe). Külön számkártya és a Humalog-IOB-val közös vonalgrafikon az
+  Áttekintésen és a Statisztikán, valamint összefoglaló az Orvosi riportban
+  — kizárólag informatív, NEM kerül levonásra a bólusz-javaslatból.
+- **🌅 Hajnali jelenség / Somogyi-hatás felismerés (új, tájékoztató):** a napló
+  automatikusan felismeri a hajnali (alapból 03:00–08:00, Beállításokban
+  módosítható), CH-bevitel/gyors inzulin nélküli, figyelemre méltó
+  vércukor-emelkedéseket, és megkülönbözteti a hajnali jelenség-gyanús és a
+  Somogyi-hatás-gyanús mintázatot (utóbbinál alacsony vércukor előzte meg az
+  emelkedést). Statisztika oldal + Orvosi riport összefoglaló — kizárólag
+  mintafelismerés, nem diagnózis és nem automatikus dózisjavaslat.
+
 ## v20.0 korrekció (2026. augusztus 12.)
 
 - **⏰ Mérés eltolódási hiba javítva:** ha egy Étkezés bejegyzés fő időpontja

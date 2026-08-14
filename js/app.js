@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '20.0';
+const APP_VERSION = '20.1';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3492,8 +3492,10 @@ function carbEvents(e) {
  return out.sort((a, b) => new Date(a.ts) - new Date(b.ts));
 }
 
-function calcIOB(entries, diaHours) {
- const now = Date.now();
+function calcIOB(entries, diaHours, atTime) {
+ /* v20 (feladat 4): opcionális atTime (ms) — a közös Humalog+bázis grafikon
+    görbe-mintavételezéséhez; megadás nélkül a jelen pillanatra számol, mint eddig. */
+ const now = atTime != null ? atTime : Date.now();
  let iob = 0;
  const DIA = (parseFloat(diaHours) || 4) * 60; // beállítható hatásidő, alap: 4 óra
  entries.forEach(e => {
@@ -3506,6 +3508,150 @@ function calcIOB(entries, diaHours) {
  });
  return iob;
 }
+window.calcIOB = calcIOB;
+
+/* ═══ v20 (feladat 4): BÁZISINZULIN (Lantus és társai) AKTÍV MENNYISÉGE ═══
+   FONTOS ORVOSI MEGJEGYZÉS: a bázisinzulin "aktív mennyisége" NEM ugyanaz, mint a
+   gyors inzulin IOB-ja — a bázis feladata a folyamatos alapszükséglet fedezése, nem
+   a bóluszcsúcsok kezelése, ezért ezt NEM vonjuk le automatikusan a bólusz-
+   javaslatból, kizárólag TÁJÉKOZTATÓ jelleggel jelenítjük meg (Áttekintés,
+   Statisztika, Orvosi riport).
+   A hatástartamok a gyártói/hivatalos alkalmazási előírások szerinti, dokumentált
+   értékek (nem szabadon állítható beállítás — Zoltán kérésére a hivatalos orvosi
+   adatokat használjuk):
+    • Lantus / Abasaglar / Semglee (glargin U100): kb. 24 óra, csúcs nélküli, lapos
+    • Toujeo (glargin U300): kb. 36 óra, csúcs nélküli, lapos
+    • Tresiba (degludec): kb. 42 óra, csúcs nélküli, lapos
+    • Levemir (detemir): kb. 24 óra, enyhe/dózisfüggő, gyakorlatilag lapos
+    • Insulatard / Humulin N (NPH): kb. 14–24 óra (itt: 20 óra), KIFEJEZETT csúccsal
+      kb. a hatásidő 20–60%-ánál — ezért ennél a Humalognál is használt, csúcsos
+      lecsengési görbét alkalmazzuk (arányosan, a hosszabb hatásidőre vetítve),
+      a lapos inzulinoknál pedig egyenletes (lineáris) lecsengést. */
+const BASAL_INSULIN_PROFILES = {
+ 'Lantus': { hours: 24, shape: 'flat' },
+ 'Abasaglar': { hours: 24, shape: 'flat' },
+ 'Semglee': { hours: 24, shape: 'flat' },
+ 'Toujeo': { hours: 36, shape: 'flat' },
+ 'Tresiba': { hours: 42, shape: 'flat' },
+ 'Levemir': { hours: 24, shape: 'flat' },
+ 'Insulatard': { hours: 20, shape: 'peak' },
+ 'Humulin N': { hours: 20, shape: 'peak' }
+};
+const DEFAULT_BASAL_PROFILE = { hours: 24, shape: 'flat' };
+function basalProfileFor(basalName) {
+ return BASAL_INSULIN_PROFILES[basalName] || DEFAULT_BASAL_PROFILE;
+}
+window.basalProfileFor = basalProfileFor;
+window.BASAL_INSULIN_PROFILES = BASAL_INSULIN_PROFILES;
+
+/* atTime (ms, opcionális) — ha nincs megadva, a jelen pillanat; a grafikonhoz
+   (görbe-mintavételezés) egy múltbeli/jövőbeli időpontra is lekérdezhető. */
+function calcBasalIOB(entries, basalName, atTime) {
+ const now = atTime != null ? atTime : Date.now();
+ const prof = basalProfileFor(basalName);
+ const DIA = prof.hours * 60;
+ let iob = 0;
+ entries.forEach(e => {
+  if (!e.insulinLong || e.insulinLong <= 0) return;
+  const mins = (now - new Date(basalTS(e))) / 60000;
+  if (mins < 0 || mins > DIA) return;
+  const t = mins / DIA;
+  const rem = prof.shape === 'peak' ?
+   (1 - t * (1 + t * (-0.5 + t / 3))) : /* NPH — csúcsos lecsengés, mint a Humalognál */
+   (1 - t); /* glargin/detemir/degludec — lapos, egyenletes lecsengés */
+  iob += parseFloat(e.insulinLong) * Math.max(0, Math.min(1, rem));
+ });
+ return iob;
+}
+window.calcBasalIOB = calcBasalIOB;
+
+/* ═══ v20 (új, Zoltán kérésére): HAJNALI JELENSÉG / SOMOGYI-HATÁS FELISMERÉS ═══
+   Kizárólag TÁJÉKOZTATÓ jellegű, visszatekintő mintafelismerés — NEM ad
+   automatikus dózis- vagy korrekciós javaslatot, a döntés mindig az orvosé.
+   Minden hajnali időszakban (alapból 03:00–08:00, l. settings.dawnStart/dawnEnd)
+   rögzített vércukormérésre megkeresi az azt megelőző, legfeljebb 10 órával
+   korábbi mérést. Ha a kettő között nem volt CH-bevitel vagy gyors inzulin
+   (hogy a különbséget ne torzítsa étkezés/korrekció hatása), és az emelkedés
+   eléri a küszöböt (~1.7 mmol/l ≈ 30 mg/dl — irodalmi tájékoztató érték),
+   "eseményt" rögzít. Naponta a legnagyobb emelkedésű, érvényes párt vesszük.
+   Az esemény "Somogyi-gyanús", ha a két mérés között (vagy közvetlenül előtte,
+   3 órán belül) alacsony vércukrot is rögzítettünk — egyébként "hajnali
+   jelenség-gyanús". A kettő kezelése klinikailag ELTÉRŐ (Somogyinál gyakran
+   kevesebb, hajnali jelenségnél inkább több/időzítettebb bázis lehet indokolt),
+   ezért fontos a megkülönböztetés — de ez az elemzés is csak támpont, nem
+   diagnózis. */
+const DAWN_DELTA_MMOL = 1.7; /* kb. 30 mg/dl */
+const DAWN_MAX_GAP_HOURS = 10;
+const DAWN_HYPO_LOOKBACK_HOURS = 3;
+function analyzeDawnPattern(entries, settings) {
+ const dawnStart = (settings && settings.dawnStart) || '03:00';
+ const dawnEnd = (settings && settings.dawnEnd) || '08:00';
+ const lowBG = (settings && settings.lowBG != null) ? settings.lowBG : 3.9;
+ const [dsH, dsM] = dawnStart.split(':').map(Number);
+ const [deH, deM] = dawnEnd.split(':').map(Number);
+ const bgEntries = (entries || [])
+  .filter(e => e && e.bloodGlucose != null && e.bloodGlucose !== '')
+  .map(e => ({
+   bloodGlucose: parseFloat(e.bloodGlucose),
+   _ts: new Date(e.bloodGlucoseTime || e.timestamp).getTime()
+  }))
+  .filter(e => !isNaN(e._ts) && !isNaN(e.bloodGlucose))
+  .sort((a, b) => a._ts - b._ts);
+ const fuelEntries = (entries || [])
+  .filter(e => e && (parseFloat(e.carbs) > 0 || parseFloat(e.insulinRapid) > 0))
+  .map(e => new Date(e.timestamp).getTime())
+  .filter(ts => !isNaN(ts));
+ const dayMap = {};
+ bgEntries.forEach(morn => {
+  const d = new Date(morn._ts);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  if (mins < dsH * 60 + dsM || mins >= deH * 60 + deM) return;
+  const dayStart = new Date(morn._ts);
+  dayStart.setHours(dsH, dsM, 0, 0);
+  const earliestRef = morn._ts - DAWN_MAX_GAP_HOURS * 3600000;
+  let ref = null;
+  for (let i = bgEntries.length - 1; i >= 0; i--) {
+   const cand = bgEntries[i];
+   if (cand._ts >= dayStart.getTime()) continue;
+   if (cand._ts < earliestRef) break;
+   ref = cand;
+   break;
+  }
+  if (!ref) return;
+  const hasFuel = fuelEntries.some(ts => ts > ref._ts && ts < morn._ts);
+  if (hasFuel) return;
+  const deltaMmol = morn.bloodGlucose - ref.bloodGlucose;
+  const dateKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const cur = dayMap[dateKey];
+  if (!cur || deltaMmol > cur.deltaMmol) {
+   dayMap[dateKey] = {
+    date: dateKey,
+    refTs: ref._ts,
+    mornTs: morn._ts,
+    refBG: ref.bloodGlucose,
+    mornBG: morn.bloodGlucose,
+    deltaMmol
+   };
+  }
+ });
+ const days = Object.values(dayMap).sort((a, b) => a.mornTs - b.mornTs);
+ const nValidDays = days.length;
+ const flagged = days.filter(x => x.deltaMmol >= DAWN_DELTA_MMOL).map(x => ({
+  ...x,
+  kind: bgEntries.some(b => b._ts >= x.refTs - DAWN_HYPO_LOOKBACK_HOURS * 3600000 && b._ts <= x.mornTs && b.bloodGlucose < lowBG) ? 'somogyi' : 'dawn'
+ }));
+ const nDawn = flagged.filter(x => x.kind === 'dawn').length;
+ const nSomogyi = flagged.filter(x => x.kind === 'somogyi').length;
+ const avgDelta = flagged.length ? flagged.reduce((s, x) => s + x.deltaMmol, 0) / flagged.length : 0;
+ return {
+  events: flagged,
+  nValidDays,
+  nDawn,
+  nSomogyi,
+  avgDelta
+ };
+}
+window.analyzeDawnPattern = analyzeDawnPattern;
 
 // ═══════════ DÁTUM SEGÉDFÜGGVÉNYEK ═══════════
 /* v12.6: helyi idejű "ÉÉÉÉ-HH-NNTÓÓ:PP" a datetime-local mezőkhöz — a korábbi
@@ -3816,18 +3962,38 @@ function parseGramsFromUnit(unit) {
  return m ? parseFloat(m[1].replace(',', '.')) : null;
 }
 window.parseGramsFromUnit = parseGramsFromUnit;
-/* v20 (feladat 4): egy ételsor végleges CH(g) értéke — elsődlegesen a
-   közvetlenül megadott/korrigált carbsFinal (szabad gramm+CH modell).
-   Visszafelé kompatibilis: ha egy régi, még a szorzós modellel mentett
-   bejegyzésen csak "mult" szerepel, abból számol (carbs × mult). */
+/* v20 (feladat 2): egy ételsor végleges CH(g) értéke — elsődlegesen a súly (g) és a
+   szénhidráttartalom (g CH/100g, a csomagolás/tápértéktáblázat szerinti arányszám)
+   szorzatából számolt érték: grams × chPer100 ÷ 100. Ez felel meg a magyar
+   élelmiszer-csomagolásokon megszokott "100 g-ban" jelölésnek, és a felhasználó
+   számára ez a legkönnyebben leolvasható/beírható adat.
+   Visszafelé kompatibilis a korábbi verziókkal: ha egy régi bejegyzésen még csak a
+   közvetlenül megadott végső CH (carbsFinal) vagy — még korábbi — a szorzós (mult)
+   modell szerinti adat szerepel, abból számol. */
 function foodLineCH(f) {
  if (!f) return 0;
+ if (f.grams != null && f.grams !== '' && f.chPer100 != null && f.chPer100 !== '') {
+  return (parseFloat(f.grams) || 0) * (parseFloat(f.chPer100) || 0) / 100;
+ }
  if (f.carbsFinal != null && f.carbsFinal !== '') return parseFloat(f.carbsFinal) || 0;
  const base = parseFloat(f.carbs) || 0;
  const mult = f.mult != null ? (parseFloat(f.mult) || 1) : 1;
  return base * mult;
 }
 window.foodLineCH = foodLineCH;
+/* v20 (feladat 2): egy tábla-/adatbázis-tétel "carbs" (tipikus adagra vetített CH) és
+   "unit" (a tipikus adag, grammban kiolvasható, ha ismert) mezőjéből számolt
+   CH/100g becslés — ez csak a mező KIINDULÓ előtöltéséhez kell, szabadon felülírható.
+   Ha a tétel mértékegysége nem grammalapú (pl. "1 dl", "1 db" ismert súly nélkül),
+   nem lehet belőle CH/100g-ot számolni — ilyenkor null-t ad vissza, a mezőt a
+   felhasználónak kell kitöltenie a csomagolás/tápértéktáblázat alapján. */
+function chPer100FromFood(f) {
+ const g = parseGramsFromUnit(f && f.unit);
+ const c = parseFloat(f && f.carbs) || 0;
+ if (!g || g <= 0) return null;
+ return Math.round((c / g * 100) * 10) / 10;
+}
+window.chPer100FromFood = chPer100FromFood;
 
 /* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — megosztott segédfüggvények (AddEntry + EditModal) ═══
    A hőmérséklet-lekérdezés SOHA nem automatikus/háttérfolyamat — csak a felhasználó
@@ -4173,6 +4339,9 @@ function Dashboard({
  const latestBG = [...sortedByTS(entries)].reverse().find(e => e.bloodGlucose);
  const latestVal = latestBG ? parseFloat(latestBG.bloodGlucose) : null;
  const iob = useMemo(() => calcIOB(entries, settings && settings.diaHours), [entries, settings]);
+ /* v20 (feladat 4): bázisinzulin (Lantus stb.) aktív mennyisége — kizárólag
+    tájékoztató jelleggel, l. calcBasalIOB megjegyzését. */
+ const basalIob = useMemo(() => calcBasalIOB(entries, settings && settings.basalName), [entries, settings]);
 
  /* v15: a megjegyzés NEM különálló localStorage-szöveg többé, hanem a legutóbbi
     vércukor-bejegyzés "notes" mezője — így a Mai bejegyzéseknél is látszik/szerkeszthető,
@@ -4477,6 +4646,30 @@ function Dashboard({
         width: `${Math.min(100, iob * 12)}%`
        }
       })))
+   ),
+   /* v20 (feladat 4): bázisinzulin aktív mennyisége — külön kis kártya, hogy a
+      gyors (Humalog) IOB-tól egyértelműen megkülönböztethető legyen; tájékoztató
+      jellegű, NEM kerül levonásra a bólusz-javaslatból. */
+   basalIob > 0.05 && h('div', {
+     className: 'rounded-2xl shadow-lg p-4 text-white relative overflow-hidden',
+     style: {
+      background: 'linear-gradient(135deg,#7c3aed,#a21caf)'
+     }
+    },
+    h('div', {
+     className: 'absolute -right-2 -bottom-4 text-7xl opacity-20 pointer-events-none select-none'
+    }, '🌡️'),
+    h('p', {
+     className: 'text-xs font-bold opacity-80 mb-1'
+    }, '🌡️ ' + window.t('Bázis aktív inzulin') + ' (' + ((settings && settings.basalName) || 'Lantus') + ')'),
+    h('p', {
+     className: 'text-3xl font-black'
+    }, basalIob.toFixed(1), h('span', {
+     className: 'text-sm ml-1'
+    }, 'E')),
+    h('p', {
+     className: 'text-xs opacity-70 mt-1'
+    }, window.t('Tájékoztató becslés — nem kerül levonásra a bólusz-javaslatból.'))
    ),
    // Átlag VC
    h('div', {
@@ -5238,6 +5431,17 @@ function generateDoctorReport(entries, settings, f, t, mode) {
  const sumCH = es.reduce((s, e) => s + (parseFloat(e.carbs) || 0), 0);
  const rapidN = (settings && settings.rapidName) || 'Humalog';
  const basalN = (settings && settings.basalName) || 'Lantus';
+ /* v20 (feladat 4): bázisinzulin becsült aktív mennyisége az időszak végén —
+    kizárólag tájékoztató, hivatalos hatástartam-adatok alapján (l. calcBasalIOB). */
+ const basalProfR = basalProfileFor(settings && settings.basalName);
+ const basalIobEnd = calcBasalIOB(entries, settings && settings.basalName, new Date(t + 'T23:59:59').getTime());
+ /* v20 (új, Zoltán kérésére): hajnali jelenség/Somogyi-hatás — csak a riport
+    időszakára szűrve, l. analyzeDawnPattern megjegyzését. */
+ const dawnPeriod = analyzeDawnPattern(entries, settings).events.filter(e => e.date >= f && e.date <= t);
+ const dawnDawnN = dawnPeriod.filter(e => e.kind === 'dawn').length;
+ const dawnSomogyiN = dawnPeriod.filter(e => e.kind === 'somogyi').length;
+ const dawnStartR = (settings && settings.dawnStart) || '03:00';
+ const dawnEndR = (settings && settings.dawnEnd) || '08:00';
 
  /* grafikonok képpé renderelése (offscreen canvas, animáció nélkül) */
  const oldColor = Chart.defaults.color;
@@ -5443,6 +5647,7 @@ ${emailIntro}${email?'':`<div class="noprint"><button onclick="window.print()">�
   ${stat(basalN+' '+R('napi átlag','daily avg'),(sumBasal/dayCount).toFixed(1)+' E')}
   ${stat(R('CH napi átlag','Daily avg carbs'),(sumCH/dayCount).toFixed(1)+' g')}
   ${stat(R('Bejegyzések','Entries'),es.length)}
+  ${stat(R('Becsült aktív bázis (időszak végén)','Est. active basal (end of period)'),basalIobEnd.toFixed(1)+' E')}
 </div>
 ${bgImg?`<h2>${R('Vércukor-értékek a teljes időszakban','Blood glucose over the whole period')}</h2><img class="chart" src="${email?'cid:hbcchart1':bgImg}">`:''}
 ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly average)')}</h2><img class="chart" src="${email?'cid:hbcchart2':patImg}">`:''}
@@ -5450,6 +5655,10 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
 <table><thead><tr><th>${R('Időpont','Time')}</th><th>${R('Típus','Type')}</th><th>${R('VC','BG')} (${UL})</th><th>CH (g)</th><th>${esc(rapidN)} (E)</th><th>${esc(basalN)} (E)</th><th>${R('Megjegyzés','Notes')}</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <p style="font-size:9.5px;color:#6b7280;margin:4px 0 0">${R('A zárójeles idő az inzulin tényleges beadási időpontja, ha az eltér a bejegyzés időpontjától.','Time in parentheses is the actual insulin injection time when it differs from the entry time.')}</p>
+<p style="font-size:9.5px;color:#6b7280;margin:4px 0 0">${R(`A "becsült aktív bázis" a(z) ${esc(basalN)} hivatalos, gyártói hatásidő-adatai alapján (kb. ${basalProfR.hours} óra, ${basalProfR.shape==='peak'?'csúccsal':'lapos, csúcs nélküli lecsengéssel'}) számolt, tájékoztató jellegű becslés — NEM kerül levonásra a bólusz-javaslatból, és nem helyettesíti az orvosi értékelést.`,`The "estimated active basal" figure is an informational estimate calculated from ${esc(basalN)}'s official, manufacturer duration-of-action data (approx. ${basalProfR.hours} hours, ${basalProfR.shape==='peak'?'with a peak':'flat, peakless decline'}) — it is NOT subtracted from the bolus suggestion and does not replace medical evaluation.`)}</p>
+${(dawnDawnN+dawnSomogyiN)>0?`<h2>${R('Hajnali jelenség / Somogyi-hatás (tájékoztató)','Dawn phenomenon / Somogyi effect (informational)')}</h2>
+<p style="font-size:10px;margin:0 0 4px">${R(`A kiválasztott időszakban ${dawnDawnN+dawnSomogyiN} alkalommal mutatott a napló hajnali (${esc(dawnStartR)}–${esc(dawnEndR)}), CH-bevitel/gyors inzulin nélküli, figyelemre méltó vércukor-emelkedést: ${dawnDawnN} esetben hajnali jelenség-gyanús, ${dawnSomogyiN} esetben Somogyi-hatás-gyanús mintázattal (utóbbinál a rögzített napló szerint alacsony vércukor előzte meg az emelkedést).`,`In the selected period the diary showed ${dawnDawnN+dawnSomogyiN} notable dawn-window (${esc(dawnStartR)}–${esc(dawnEndR)}) blood glucose rises without recorded carb intake/rapid insulin: ${dawnDawnN} with a pattern suggestive of dawn phenomenon, ${dawnSomogyiN} suggestive of the Somogyi effect (the latter preceded by a recorded low glucose reading).`)}</p>
+<p style="font-size:9.5px;color:#6b7280;margin:0 0 4px">${R('Ez kizárólag a naplóbejegyzések mintafelismerése, nem diagnózis és nem automatikus dózisjavaslat — a hajnali jelenség és a Somogyi-hatás kezelése eltérő lehet, a végső döntést mindig a kezelőorvos hozza meg.','This is a pattern detection over diary entries only — not a diagnosis and not an automatic dosing suggestion. Managing dawn phenomenon vs. the Somogyi effect can differ; the treating physician always makes the final decision.')}</p>`:''}
 <div class="warn">⚠️ ${R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!','This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!')}</div>
 <div class="foot"><span>${R('HBC Diabétesz Napló','HBC Diabetes Diary')} v${APP_VERSION} Type 1 Diabetes APP</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
 ${email?'':'<scr'+'ipt>setTimeout(function(){window.print();},400);</scr'+'ipt>'}
@@ -5487,6 +5696,17 @@ ${email?'':'<scr'+'ipt>setTimeout(function(){window.print();},400);</scr'+'ipt>'
    dayCount,
    rapidN,
    basalN,
+   /* v20 (feladat 4): bázisinzulin becsült aktív mennyisége — l. a HTML-riport
+      azonos mezőjének megjegyzését. */
+   basalIobEnd: basalIobEnd.toFixed(1) + ' E',
+   basalProfHours: basalProfR.hours,
+   basalProfPeak: basalProfR.shape === 'peak',
+   /* v20 (új, Zoltán kérésére): hajnali jelenség/Somogyi-hatás — l. a HTML-riport
+      azonos szakaszának megjegyzését. */
+   dawnDawnN,
+   dawnSomogyiN,
+   dawnStart: dawnStartR,
+   dawnEnd: dawnEndR,
    generated: new Date().toLocaleString(window.HBC_LOCALE()),
    rows: es.map(e => [
     fmtAlwaysDT(e.timestamp),
@@ -5574,6 +5794,21 @@ function buildReportPdf(rep, logoB64) {
    vLineWidth: () => 1
   },
   margin: [0, 4, 0, 4]
+ });
+ /* v20 (feladat 4): kétoszlopos változat — egy kpiCell + egy magyarázó szöveg —
+    a bázisinzulin becsült aktív mennyiségéhez. */
+ const kpiRow2 = cells => ({
+  table: {
+   widths: [140, '*'],
+   body: [cells]
+  },
+  layout: {
+   hLineColor: () => '#e0e7ff',
+   vLineColor: () => '#e0e7ff',
+   hLineWidth: () => 1,
+   vLineWidth: () => 1
+  },
+  margin: [0, 0, 0, 4]
  });
  const h2 = txt => ({
   text: txt,
@@ -5673,6 +5908,17 @@ function buildReportPdf(rep, logoB64) {
     kpiCell(R('CH napi átlag', 'Daily avg carbs'), d.chAvg),
     kpiCell(R('Bejegyzések', 'Entries'), String(d.entryCount))
    ]),
+   /* v20 (feladat 4): bázisinzulin becsült aktív mennyisége — l. a HTML-riport
+      azonos mezőjének megjegyzését. Önálló, keskeny sor (2 oszlop: érték + magyarázat). */
+   kpiRow2([
+    kpiCell(R('Becsült aktív bázis (időszak végén)', 'Est. active basal (end of period)'), d.basalIobEnd),
+    {
+     text: R(`A(z) ${d.basalN} hivatalos hatásidő-adatai alapján (kb. ${d.basalProfHours} óra, ${d.basalProfPeak?'csúccsal':'lapos lecsengéssel'}) számolt, tájékoztató becslés — nem kerül levonásra a bólusz-javaslatból.`, `Informational estimate from ${d.basalN}'s official duration-of-action data (approx. ${d.basalProfHours}h, ${d.basalProfPeak?'with a peak':'flat decline'}) — not subtracted from the bolus suggestion.`),
+     fontSize: 7,
+     color: GRAY,
+     margin: [8, 8, 4, 4]
+    }
+   ]),
    ...(rep.bgImg ? [h2(R('Vércukor-értékek a teljes időszakban', 'Blood glucose over the whole period')), {
     image: rep.bgImg,
     width: 515
@@ -5698,7 +5944,23 @@ function buildReportPdf(rep, logoB64) {
     fontSize: 7.5,
     color: GRAY,
     margin: [0, 4, 0, 0]
-   }, {
+   },
+   /* v20 (új, Zoltán kérésére): hajnali jelenség/Somogyi-hatás — l. a HTML-riport
+      azonos szakaszának megjegyzését. */
+   ...((d.dawnDawnN + d.dawnSomogyiN) > 0 ? [
+    h2(R('Hajnali jelenség / Somogyi-hatás (tájékoztató)', 'Dawn phenomenon / Somogyi effect (informational)')),
+    {
+     text: R(`A kiválasztott időszakban ${d.dawnDawnN+d.dawnSomogyiN} alkalommal mutatott a napló hajnali (${d.dawnStart}–${d.dawnEnd}), CH-bevitel/gyors inzulin nélküli, figyelemre méltó vércukor-emelkedést: ${d.dawnDawnN} esetben hajnali jelenség-gyanús, ${d.dawnSomogyiN} esetben Somogyi-hatás-gyanús mintázattal.`, `In the selected period the diary showed ${d.dawnDawnN+d.dawnSomogyiN} notable dawn-window (${d.dawnStart}–${d.dawnEnd}) blood glucose rises without recorded carb intake/rapid insulin: ${d.dawnDawnN} suggestive of dawn phenomenon, ${d.dawnSomogyiN} suggestive of the Somogyi effect.`),
+     fontSize: 8.5,
+     margin: [0, 2, 0, 2]
+    },
+    {
+     text: R('Ez kizárólag a naplóbejegyzések mintafelismerése, nem diagnózis és nem automatikus dózisjavaslat — a végső döntést mindig a kezelőorvos hozza meg.', 'This is a pattern detection over diary entries only — not a diagnosis and not an automatic dosing suggestion; the treating physician always makes the final decision.'),
+     fontSize: 7.5,
+     color: GRAY,
+     margin: [0, 0, 0, 4]
+    }
+   ] : []), {
     table: {
      widths: ['*'],
      body: [[{
@@ -5811,11 +6073,20 @@ function Statistics({
   onSaveActCfg && onSaveActCfg(merged);
  };
  const iob = useMemo(() => calcIOB(entries, settings && settings.diaHours), [entries, settings]);
+ /* v20 (feladat 4): bázisinzulin aktív mennyisége — l. Dashboard azonos megjegyzését. */
+ const basalIob = useMemo(() => calcBasalIOB(entries, settings && settings.basalName), [entries, settings]);
+ /* v20 (új, Zoltán kérésére): hajnali jelenség/Somogyi-hatás felismerés — l.
+    analyzeDawnPattern megjegyzését. A TELJES naplón fut (nem csak a kiválasztott
+    időszakon), hogy a visszatekintő minta ne függjön az aktuális szűréstől. */
+ const dawn = useMemo(() => analyzeDawnPattern(entries, settings), [entries, settings]);
  const patR = useRef(null);
  const patC = useRef(null);
  /* v18: AGP percentilis grafikon (6.2) */
  const agpR = useRef(null);
  const agpC = useRef(null);
+ /* v20 (feladat 4): Humalog + bázisinzulin közös aktív-inzulin grafikonja */
+ const iobR = useRef(null);
+ const iobC = useRef(null);
  /* v8: orvosi riport időszaka — naptári "-tól -ig" */
  const [repF, setRepF] = useState(subD(14));
  const [repT, setRepT] = useState(todayStr());
@@ -6113,6 +6384,102 @@ function Statistics({
    patC.current = null;
   };
  }, [hourly, settings]);
+ /* ═══ v20 (feladat 4): Humalog + bázisinzulin KÖZÖS aktív-inzulin görbéje ═══
+    Kizárólag tájékoztató jellegű, visszatekintő becslés — l. calcBasalIOB
+    megjegyzését. Az ablak a hosszabb hatástartamú inzulinhoz igazodik (max 48 óra),
+    hogy a bázisinzulin lecsengése is végig látszódjon. */
+ const basalProf = basalProfileFor(settings && settings.basalName);
+ useEffect(() => {
+  if (!iobR.current) return;
+  iobC.current && iobC.current.destroy();
+  const _dark = document.documentElement.hasAttribute('data-hbc-dark');
+  Chart.defaults.color = _dark ? '#c9c5e8' : '#666';
+  const winHours = Math.min(48, Math.max(8, basalProf.hours));
+  const stepMin = 20;
+  const nPts = Math.floor(winHours * 60 / stepMin);
+  const now = Date.now();
+  const p2 = n => String(n).padStart(2, '0');
+  const labels = [];
+  const rapidSeries = [];
+  const basalSeries = [];
+  const totalSeries = [];
+  for (let i = nPts; i >= 0; i--) {
+   const ts = now - i * stepMin * 60000;
+   const dd = new Date(ts);
+   /* v20 (feladat 4): helyi idejű "ÓÓ:PP" címke — l. nowLocalDT() azonos elve,
+      a toISOString() UTC-t adna, ami eltérne a készülék időzónájától */
+   labels.push(p2(dd.getHours()) + ':' + p2(dd.getMinutes()));
+   const r = calcIOB(entries, settings && settings.diaHours, ts);
+   const b = calcBasalIOB(entries, settings && settings.basalName, ts);
+   rapidSeries.push(Math.round(r * 100) / 100);
+   basalSeries.push(Math.round(b * 100) / 100);
+   totalSeries.push(Math.round((r + b) * 100) / 100);
+  }
+  iobC.current = new Chart(iobR.current.getContext('2d'), {
+   type: 'line',
+   data: {
+    labels,
+    datasets: [{
+      label: ((settings && settings.rapidName) || 'Humalog') + ' IOB (E)',
+      data: rapidSeries,
+      borderColor: '#4f46e5',
+      backgroundColor: 'rgba(79,70,229,.12)',
+      pointRadius: 0,
+      borderWidth: 2,
+      tension: .25,
+      fill: true
+     },
+     {
+      label: ((settings && settings.basalName) || 'Lantus') + ' aktív bázis (E)',
+      data: basalSeries,
+      borderColor: '#a21caf',
+      backgroundColor: 'rgba(162,28,175,.10)',
+      pointRadius: 0,
+      borderWidth: 2,
+      tension: .1,
+      fill: true
+     },
+     {
+      label: window.t('Összesen (tájékoztató)'),
+      data: totalSeries,
+      borderColor: 'rgba(107,114,128,.7)',
+      borderDash: [5, 4],
+      pointRadius: 0,
+      borderWidth: 1.5,
+      tension: .1,
+      fill: false
+     }
+    ]
+   },
+   options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+     legend: {
+      position: 'top'
+     }
+    },
+    scales: {
+     y: {
+      min: 0,
+      title: {
+       display: true,
+       text: 'E'
+      }
+     },
+     x: {
+      ticks: {
+       maxTicksLimit: 8
+      }
+     }
+    }
+   }
+  });
+  return () => {
+   iobC.current && iobC.current.destroy();
+   iobC.current = null;
+  };
+ }, [entries, settings, basalProf.hours]);
  const meals = filtered.filter(e => e.type === 'Étkezés' && e.carbs > 0 && e.insulinRapid > 0);
  const avgC = meals.length > 0 ? meals.reduce((s, e) => s + parseFloat(e.carbs), 0) / meals.length : 0;
  const avgI = meals.length > 0 ? meals.reduce((s, e) => s + parseFloat(e.insulinRapid), 0) / meals.length : 0;
@@ -6171,6 +6538,91 @@ function Statistics({
     )
    )
   ),
+
+  /* v20 (feladat 4): bázisinzulin aktív mennyisége — külön kártya, majd a közös
+     grafikon. Kizárólag tájékoztató, NEM kerül levonásra a bólusz-javaslatból. */
+  basalIob > 0.05 && h('div', {
+    className: 'rounded-2xl shadow-lg p-4 text-white',
+    style: {
+     background: 'linear-gradient(135deg,#7c3aed,#a21caf)'
+    }
+   },
+   h('p', {
+    className: 'text-sm font-bold opacity-80 mb-1'
+   }, '🌡️ ' + window.t('Bázis aktív inzulin') + ' (' + ((settings && settings.basalName) || 'Lantus') + ')'),
+   h('p', {
+    className: 'text-4xl font-black iob-p'
+   }, basalIob.toFixed(2), h('span', {
+    className: 'text-xl ml-1'
+   }, 'E')),
+   h('p', {
+    className: 'text-xs opacity-70 mt-1'
+   }, `~${basalProf.hours}h ${window.t('hatástartam')} (${basalProf.shape === 'peak' ? window.t('csúcsos lecsengés') : window.t('lapos, csúcs nélküli lecsengés')}). ` + window.t('Tájékoztató becslés — nem kerül levonásra a bólusz-javaslatból, konzultálj orvossal!'))
+  ),
+
+  card([
+   h('h2', {
+    className: 'font-black text-gray-800 mb-1'
+   }, '🔄🌡️ ' + window.t('Aktív inzulin — közös görbe')),
+   h('p', {
+    className: 'text-xs text-gray-500 mb-2'
+   }, window.t('A gyors (bólusz) és a bázisinzulin becsült, egymástól elkülönített lecsengése az elmúlt időszakban, valamint a kettő összege — kizárólag tájékoztató jelleggel.')),
+   h('div', {
+     style: {
+      height: '260px'
+     }
+    },
+    h('canvas', {
+     ref: iobR
+    })
+   )
+  ]),
+
+  /* ═══ v20 (új, Zoltán kérésére): HAJNALI JELENSÉG / SOMOGYI-HATÁS (tájékoztató) ═══ */
+  dawn.nValidDays > 0 && card([
+   h('h2', {
+    className: 'font-black text-gray-800 mb-1'
+   }, '🌅 ' + window.t('Hajnali jelenség / Somogyi-hatás (tájékoztató)')),
+   h('p', {
+    className: 'text-sm text-gray-700 mb-2'
+   }, `${dawn.nDawn + dawn.nSomogyi} / ${dawn.nValidDays} ` + window.t('éjszaka közül mutatott figyelemre méltó reggeli emelkedést') +
+   (dawn.events.length ? ` (Ø ${window.bgU.dispFixed(dawn.avgDelta)} ${window.bgU.label()} — ` + window.t('Átlagos emelkedés') + ')' : '')),
+   h('div', {
+     className: 'grid grid-cols-2 gap-3 mb-2'
+    },
+    h('div', {
+      className: 'p-3 rounded-xl bg-amber-50 border-2 border-amber-200 text-center'
+     },
+     h('p', {
+      className: 'text-2xl font-black text-amber-700'
+     }, dawn.nDawn),
+     h('p', {
+      className: 'text-xs font-bold text-amber-700'
+     }, '🌅 ' + window.t('hajnali jelenség-gyanú'))
+    ),
+    h('div', {
+      className: 'p-3 rounded-xl bg-rose-50 border-2 border-rose-200 text-center'
+     },
+     h('p', {
+      className: 'text-2xl font-black text-rose-700'
+     }, dawn.nSomogyi),
+     h('p', {
+      className: 'text-xs font-bold text-rose-700'
+     }, '📉 ' + window.t('Somogyi-gyanú'))
+    )
+   ),
+   dawn.events.length > 0 && h('div', {
+     className: 'max-h-40 overflow-y-auto space-y-1 mb-2'
+    },
+    dawn.events.slice().reverse().map(ev => h('p', {
+     key: ev.date,
+     className: 'text-xs text-gray-600'
+    }, `${ev.date} · ${window.bgU.dispFixed(ev.refBG)}→${window.bgU.dispFixed(ev.mornBG)} ${window.bgU.label()} (+${window.bgU.dispFixed(ev.deltaMmol)}) — ${ev.kind === 'somogyi' ? '📉 ' + window.t('Somogyi-gyanú') : '🌅 ' + window.t('hajnali jelenség-gyanú')}`))
+   ),
+   h('p', {
+    className: 'text-[11px] text-gray-400'
+   }, '⚠️ ' + window.t('Ez az elemzés kizárólag tájékoztató jellegű mintafelismerés a rögzített naplóadatok alapján — nem diagnózis és nem automatikus dózisjavaslat. A hajnali jelenség és a Somogyi-hatás kezelése eltérő lehet, a végső döntést mindig a kezelőorvos hozza meg!'))
+  ]),
 
   // Időszak választó
   card([
@@ -6939,6 +7391,8 @@ function ActivityFields({
     mintája szerint: keresőmező + élő szűrt, kattintható lista a korábbi
     tevékenységekből, sok elem esetén is gyors választás. */
  const [aSearch, setASearch] = useState('');
+ /* v20 (feladat 3): a "választás a korábbiakból" lista alapból zárt */
+ const [pickerOpen, setPickerOpen] = useState(false);
  const namesShown = names.filter(n => n.toLowerCase().includes(aSearch.toLowerCase()));
  const cur = (form.activity || '').split(',').map(x => x.trim()).filter(Boolean);
  const addName = n => {
@@ -6990,13 +7444,18 @@ function ActivityFields({
    className: 'p-3 bg-yellow-50 rounded-2xl border-2 border-yellow-200 space-y-3'
   },
   h('div', null,
-   h('label', {
-    className: 'text-sm font-bold text-yellow-800 block mb-1'
-   }, '🏃 ' + window.t('Tevékenység (választás a korábbiakból)')),
+   /* v20 (feladat 3): a lista alapból ÖSSZECSUKOTT állapotban jelenik meg —
+      a felirat gombra kattintva nyílik/csukódik, hogy sok korábbi tevékenység
+      esetén se foglaljon feleslegesen helyet az űrlapon. */
+   h('button', {
+    type: 'button',
+    onClick: () => setPickerOpen(p => !p),
+    className: 'text-sm font-bold text-yellow-800 flex items-center gap-1 mb-1 w-full text-left'
+   }, (pickerOpen ? '▾ ' : '▸ ') + '🏃 ' + window.t('Tevékenység (választás a korábbiakból)')),
    /* v20 (feladat 3): a korábbi egyszerű <select> helyett kereshető lista —
       sok korábbi tevékenység esetén a beírt szöveg szűkíti a találatokat,
       egy kattintással hozzáadható a bejegyzéshez. */
-   names.length > 0 && h('div', {
+   pickerOpen && names.length > 0 && h('div', {
      className: 'mb-2'
     },
     h('input', {
@@ -7199,16 +7658,15 @@ function AddEntry({
  /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
     Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
  const addFoodToForm = (f, mult = 1) => setForm(p => {
-  /* v20 (feladat 4): a szorzó helyett az ételsor mostantól közvetlenül
-     szerkeszthető gramm + CH(g) párral kerül a bejegyzésbe — az alap
-     táblázat-értékek (unit-ban szereplő tipikus gramm, ha kiolvasható, és a
-     tétel CH-ja) csak KIINDULÓ előtöltésként szolgálnak, bármikor felülírhatók. */
+  /* v20 (feladat 2): az ételsor Idő / Súly (g) / CH(100g) / Törlés mezőkkel kerül
+     a bejegyzésbe — az adatbázis-tétel alapján kiolvasható tipikus súly és CH/100g
+     csak KIINDULÓ előtöltésként szolgál, bármikor szabadon felülírható. */
   const baseG = parseGramsFromUnit(f.unit);
   const foods = [...p.foods, {
    ...f,
    fid: Date.now(),
    grams: baseG != null ? baseG * mult : null,
-   carbsFinal: (parseFloat(f.carbs) || 0) * mult
+   chPer100: chPer100FromFood(f)
   }];
   const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
@@ -7237,11 +7695,14 @@ function AddEntry({
    grams: grams === '' ? null : parseFloat(grams)
   } : f)
  }));
- const setFoodCarbs = (fid, carbsFinal) => setForm(p => ({
+ /* v20 (feladat 2): a korábbi, közvetlenül szerkeszthető végső CH mező helyett a
+    szénhidráttartalom 100 grammra vetítve (CH/100g) adható meg — a tétel végleges
+    CH(g) értékét ebből és a súlyból a foodLineCH() számolja, megjelenítve. */
+ const setFoodChPer100 = (fid, val) => setForm(p => ({
   ...p,
   foods: p.foods.map(f => f.fid === fid ? {
    ...f,
-   carbsFinal: carbsFinal === '' ? null : parseFloat(carbsFinal)
+   chPer100: val === '' ? null : parseFloat(val)
   } : f)
  }));
  /* v18.4: tételenkénti CH-időpont ("ÓÓ:PP"); ha a bejegyzés idejével azonos, töröljük */
@@ -7287,6 +7748,22 @@ function AddEntry({
  const actProfile = actProfilesOn ? actProfiles.find(p => p.id === form.activityProfileId) : null;
  const actDaypartKey = actProfileDaypartKey(form.timestamp, settings);
  const actPct = actProfile ? (parseFloat(actProfile[actDaypartKey]) || 0) : 0;
+ /* v20 (feladat 1): hőmérséklet automatikus lekérdezése — csak ha a Beállításokban
+    be van kapcsolva (alapból BE), a blokk láthatóvá válik, és még nincs sem kézzel,
+    sem korábban automatikusan megadott érték. Sikertelen/megtagadott esetben a
+    kézi mező és a "Lekérdezés" gomb továbbra is elérhető marad — az auto-lekérdezés
+    ilyenkor egyszerűen nem ír felül semmit. */
+ useEffect(() => {
+  const autoOn = !settings || settings.featAutoWeather !== false;
+  if (!autoOn || !actProfilesOn || actProfiles.length === 0) return;
+  if (form.weatherTemp !== '' || weatherBusy) return;
+  setWeatherErr('');
+  setWeatherBusy(true);
+  fetchDeviceWeather(
+   temp => { setWeatherBusy(false); setForm(p => ({ ...p, weatherTemp: String(temp), weatherSource: 'auto' })); },
+   msg => { setWeatherBusy(false); setWeatherErr(msg); }
+  );
+ }, [actProfilesOn, actProfiles.length, settings && settings.featAutoWeather, form.weatherTemp, weatherBusy]);
  const bolusNeed = bolusBase + bgCorr;
  const bolusNeedAdj = actPct ? bolusNeed * (1 + actPct / 100) : bolusNeed;
  const sugInsRaw = Math.max(0, bolusNeedAdj - iobNow);
@@ -7320,8 +7797,8 @@ function AddEntry({
   const doSave = () => onSave({
    ...form,
    carbs: _hasCH ? (totalCH || null) : null,
-   /* v20 (feladat 4 — kódtisztítás): a megszűnt "mult" mező nem kerül ki mentésre,
-      csak a szabad grams/carbsFinal pár */
+   /* v20 (feladat 2/4 — kódtisztítás): a megszűnt "mult" mező nem kerül ki mentésre,
+      csak a szabad grams/chPer100 pár (+ carbsFinal, visszafelé-kompatibilitáshoz) */
    foods: _hasCH ? form.foods.map(({ mult, ...rest }) => rest) : [],
    fatProt: _hasCH ? !!form.fatProt : false, /* v18 (6.3) */
    mealType: form.type === 'Étkezés' ? form.mealType : '',
@@ -7681,29 +8158,35 @@ function AddEntry({
         title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
         className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
        }),
-       /* v20 (feladat 4): szabad gramm + CH(g) pár a szorzó helyett — az alapérték
-          csak kiinduló előtöltés, bármikor a ténylegesen elfogyasztott
-          mennyiségre/CH-ra korrigálható (pl. fél adag esetén). */
+       /* v20 (feladat 2): Súly (g) + CH/100g pár — az alapérték csak kiinduló
+          előtöltés, bármikor szabadon korrigálható (pl. fél adag, vagy a
+          csomagoláson szereplő, a táblázatétól eltérő érték esetén). A tétel
+          végleges CH(g)-ja (súly × CH/100g ÷ 100) ebből számolt, megjelenített
+          érték — nem külön mező. */
        h('input', {
         type: 'number',
         step: '1',
         min: '0',
         value: f.grams != null ? f.grams : '',
         onChange: e => setFoodGrams(f.fid, e.target.value),
-        placeholder: 'g',
-        title: window.t('Ténylegesen elfogyasztott mennyiség (gramm) — szabadon korrigálható'),
-        className: 'border rounded-lg px-1 py-1 text-xs w-14'
+        placeholder: window.t('súly (g)'),
+        title: window.t('A ténylegesen elfogyasztott mennyiség súlya, grammban'),
+        className: 'border rounded-lg px-1 py-1 text-xs w-16'
        }),
        h('input', {
         type: 'number',
         step: '0.1',
         min: '0',
-        value: f.carbsFinal != null ? f.carbsFinal : '',
-        onChange: e => setFoodCarbs(f.fid, e.target.value),
-        placeholder: 'CH',
-        title: window.t('Ennek a tételnek a szénhidráttartalma (gramm) — szabadon korrigálható'),
-        className: 'border rounded-lg px-1 py-1 text-xs w-14 font-bold text-indigo-700'
+        value: f.chPer100 != null ? f.chPer100 : '',
+        onChange: e => setFoodChPer100(f.fid, e.target.value),
+        placeholder: window.t('CH/100g'),
+        title: window.t('Szénhidráttartalom 100 grammra vetítve — a termék csomagolásáról vagy egy tápérték-táblázatból (pl. a beépített CH-táblázatból)'),
+        className: 'border rounded-lg px-1 py-1 text-xs w-16 font-bold text-indigo-700'
        }),
+       h('span', {
+        className: 'text-xs font-black text-indigo-700 whitespace-nowrap',
+        title: window.t('Számolt szénhidráttartalom: súly × CH/100g ÷ 100')
+       }, '= ' + fmtCH(foodLineCH(f)) + 'g CH'),
        h('button', {
         type: 'button',
         onClick: () => removeFood(f.fid),
@@ -8049,7 +8532,7 @@ function ViewEntryModal({
        key: i,
        className: 'text-sm text-gray-800 font-semibold pl-2'
       }, '• ' + f.name + ' — ' + (f.grams != null && f.grams !== '' ? fmtCH(f.grams) + 'g · ' : '') + fmtCH(foodLineCH(f)) + 'g CH' +
-     (f.itemTime ? ' · ⏱️ ' + f.itemTime : ''))) /* v18.4: tétel saját időpontja; v20: gramm+CH közvetlenül */
+     (f.itemTime ? ' · ⏱️ ' + f.itemTime : ''))) /* v18.4: tétel saját időpontja; v20 (feladat 2): súly + CH/100g alapján számolt CH */
      ),
      entry.carbs > 0 && row('🍽️', 'TELJES CH', fmtCH(entry.carbs) + ' g'),
     entry.fatProt && row('🥓', window.t('Zsíros, fehérjedús étel'), window.t('elnyújtott felszívódás — 2–3 óra múlva ellenőrző mérés javasolt')), /* v18 (6.3) */
@@ -8102,18 +8585,25 @@ function EditModal({
     A tárolt carbs = ételek CH-ja + extra CH; megnyitáskor szétbontjuk, mentéskor
     újra összeadjuk, így a CH mindig pontos marad. */
  const [form, setForm] = useState(() => {
-  /* v20 (feladat 4): régi, még az 1–10-es egész szorzóval mentett tételek
-     migrálása szabad gramm+CH modellre — ha a tételen már van explicit
-     grams/carbsFinal, az marad; egyébként a korábbi mult alapján számolt
-     kiinduló érték kerül be, ami innentől szabadon korrigálható. */
+  /* v20 (feladat 2): korábbi tételek (akár a régi szorzós, akár a köztes
+     grams+carbsFinal modellel mentve) migrálása a Súly (g) + CH/100g modellre —
+     ha a tételen már van explicit chPer100, az marad; egyébként a meglévő
+     súly+végleges CH párból (ha mindkettő ismert) visszaszámoljuk a CH/100g-ot,
+     kiinduló, szabadon korrigálható értékként. A carbsFinal megmarad
+     tartalék/visszafelé-kompatibilitási célra, ha a súly nem lenne ismert. */
   const fds = (Array.isArray(entry.foods) ? entry.foods : []).map((f, i) => {
    const mult = parseFloat(f.mult) || 1;
    const baseG = parseGramsFromUnit(f.unit);
+   const grams = f.grams != null ? f.grams : (baseG != null ? baseG * mult : null);
+   const carbsFinal = f.carbsFinal != null ? f.carbsFinal : (parseFloat(f.carbs) || 0) * mult;
+   const chPer100 = f.chPer100 != null ? f.chPer100 :
+    (grams != null && grams > 0 && carbsFinal != null) ? Math.round((carbsFinal / grams * 100) * 10) / 10 : null;
    return {
     ...f,
     fid: f.fid || i + 1,
-    grams: f.grams != null ? f.grams : (baseG != null ? baseG * mult : null),
-    carbsFinal: f.carbsFinal != null ? f.carbsFinal : (parseFloat(f.carbs) || 0) * mult
+    grams,
+    chPer100,
+    carbsFinal
    };
   });
   const fCH = fds.reduce((s, f) => s + foodLineCH(f), 0);
@@ -8159,14 +8649,14 @@ function EditModal({
  /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
     Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
  const addFoodToForm = (f, mult = 1) => setForm(p => {
-  /* v20 (feladat 4): l. AddEntry azonos nevű függvényének megjegyzését —
-     mostantól szabad gramm + CH(g) pár kerül a sorra, nem szorzó. */
+  /* v20 (feladat 2): l. AddEntry azonos nevű függvényének megjegyzését —
+     Idő / Súly (g) / CH(100g) / Törlés mezők kerülnek a sorra. */
   const baseG = parseGramsFromUnit(f.unit);
   const foods = [...(p.foods || []), {
    ...f,
    fid: Date.now(),
    grams: baseG != null ? baseG * mult : null,
-   carbsFinal: (parseFloat(f.carbs) || 0) * mult
+   chPer100: chPer100FromFood(f)
   }];
   const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
@@ -8196,11 +8686,13 @@ function EditModal({
    grams: grams === '' ? null : parseFloat(grams)
   } : x)
  }));
- const setFoodCarbs = (fid, carbsFinal) => setForm(p => ({
+ /* v20 (feladat 2): l. AddEntry azonos nevű függvényének megjegyzését — CH/100g
+    alapú szerkesztés utólag is elérhető. */
+ const setFoodChPer100 = (fid, val) => setForm(p => ({
   ...p,
   foods: (p.foods || []).map(x => x.fid === fid ? {
    ...x,
-   carbsFinal: carbsFinal === '' ? null : parseFloat(carbsFinal)
+   chPer100: val === '' ? null : parseFloat(val)
   } : x)
  }));
  /* v18.4: tételenkénti CH-időpont utólagos szerkesztésnél is */
@@ -8236,14 +8728,28 @@ function EditModal({
  const actProfile = actProfilesOn ? actProfiles.find(p => p.id === form.activityProfileId) : null;
  const actDaypartKey = actProfileDaypartKey(form.timestamp, settings);
  const actPct = actProfile ? (parseFloat(actProfile[actDaypartKey]) || 0) : 0;
+ /* v20 (feladat 1): hőmérséklet automatikus lekérdezése utólagos szerkesztésnél is —
+    l. AddEntry azonos logikáját. */
+ useEffect(() => {
+  const autoOn = !settings || settings.featAutoWeather !== false;
+  if (!autoOn || !actProfilesOn || actProfiles.length === 0) return;
+  if (form.weatherTemp !== '' && form.weatherTemp != null) return;
+  if (weatherBusy) return;
+  setWeatherErr('');
+  setWeatherBusy(true);
+  fetchDeviceWeather(
+   temp => { setWeatherBusy(false); setForm(p => ({ ...p, weatherTemp: String(temp), weatherSource: 'auto' })); },
+   msg => { setWeatherBusy(false); setWeatherErr(msg); }
+  );
+ }, [actProfilesOn, actProfiles.length, settings && settings.featAutoWeather, form.weatherTemp, weatherBusy]);
  const submit = e => {
   e.preventDefault();
   const _mmol = form.bloodGlucose !== '' && form.bloodGlucose != null ? window.bgU.toMmol(form.bloodGlucose) : null;
   const doSave = () => onSave({
    ...form,
    carbs: (showFoodEd && totalCH) ? totalCH : null,
-   /* v20 (feladat 4 — kódtisztítás): a megszűnt "mult" mező nem kerül ki mentésre,
-      csak a szabad grams/carbsFinal pár */
+   /* v20 (feladat 2/4 — kódtisztítás): a megszűnt "mult" mező nem kerül ki mentésre,
+      csak a szabad grams/chPer100 pár (+ carbsFinal, visszafelé-kompatibilitáshoz) */
    foods: showFoodEd ? (form.foods || []).map(({ mult, ...rest }) => rest) : [],
    fatProt: showFoodEd ? !!form.fatProt : false, /* v18 (6.3) */
    mealType: form.type === 'Étkezés' ? (form.mealType || '') : '',
@@ -8527,29 +9033,33 @@ function EditModal({
           title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
           className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
          }),
-         /* v20 (feladat 4): szabad gramm + CH(g) pár a szorzó helyett, utólagos
-            szerkesztésnél is — bármikor a ténylegesen elfogyasztott
-            mennyiségre/CH-ra korrigálható (pl. fél adag esetén). */
+         /* v20 (feladat 2): Súly (g) + CH/100g pár, utólagos szerkesztésnél is —
+            bármikor szabadon korrigálható. A tétel végleges CH(g)-ja (súly ×
+            CH/100g ÷ 100) ebből számolt, megjelenített érték — nem külön mező. */
          h('input', {
           type: 'number',
           step: '1',
           min: '0',
           value: f.grams != null ? f.grams : '',
           onChange: e => setFoodGrams(f.fid, e.target.value),
-          placeholder: 'g',
-          title: window.t('Ténylegesen elfogyasztott mennyiség (gramm) — szabadon korrigálható'),
-          className: 'border rounded-lg px-1 py-1 text-xs w-14'
+          placeholder: window.t('súly (g)'),
+          title: window.t('A ténylegesen elfogyasztott mennyiség súlya, grammban'),
+          className: 'border rounded-lg px-1 py-1 text-xs w-16'
          }),
          h('input', {
           type: 'number',
           step: '0.1',
           min: '0',
-          value: f.carbsFinal != null ? f.carbsFinal : '',
-          onChange: e => setFoodCarbs(f.fid, e.target.value),
-          placeholder: 'CH',
-          title: window.t('Ennek a tételnek a szénhidráttartalma (gramm) — szabadon korrigálható'),
-          className: 'border rounded-lg px-1 py-1 text-xs w-14 font-bold text-indigo-700'
+          value: f.chPer100 != null ? f.chPer100 : '',
+          onChange: e => setFoodChPer100(f.fid, e.target.value),
+          placeholder: window.t('CH/100g'),
+          title: window.t('Szénhidráttartalom 100 grammra vetítve — a termék csomagolásáról vagy egy tápérték-táblázatból (pl. a beépített CH-táblázatból)'),
+          className: 'border rounded-lg px-1 py-1 text-xs w-16 font-bold text-indigo-700'
          }),
+         h('span', {
+          className: 'text-xs font-black text-indigo-700 whitespace-nowrap',
+          title: window.t('Számolt szénhidráttartalom: súly × CH/100g ÷ 100')
+         }, '= ' + fmtCH(foodLineCH(f)) + 'g CH'),
          h('button', {
           type: 'button',
           onClick: () => removeFood(f.fid),
@@ -9787,7 +10297,14 @@ const DEFAULT_SETTINGS = {
  /* v19.3 (feladat 1): aktivitás/hőség visszatekintő elemzés kalibrációja */
  actAnalysisDays: 30,
  actAnalysisMinGap: 30,
- actAnalysisMaxGap: 360
+ actAnalysisMaxGap: 360,
+ /* v20 (feladat 1): hőmérséklet automatikus lekérdezése az Aktivitás/hőség blokk
+    megjelenésekor — alapból BE, jelölőnégyzettel kikapcsolható (l. Beállítások). */
+ featAutoWeather: true,
+ /* v20 (feladat 5): hajnali jelenség / Somogyi-hatás felismerés időablaka (tájékoztató
+    jellegű elemzés — l. Statisztika oldal + Orvosi riport). */
+ dawnStart: '03:00',
+ dawnEnd: '08:00'
 };
 
 /* v8: extrém vércukorérték-ellenőrzés (mmol/l-ben) — elgépelés-védelem */
@@ -10437,6 +10954,13 @@ function Settings({
       label: t('Aktivitás/hőség profilok'),
       desc: t('Szerkeszthető profilok (pl. kerti munka, meleg idő) a bólusjavaslat napszakonkénti %-os csökkentéséhez + extra CH emlékeztetőhöz. Beállítás: lentebb, külön kártyán.'),
       nav: { anchor: 'hbc-act-profiles-card' }
+     },
+     {
+      k: 'featAutoWeather',
+      icon: '📍',
+      label: t('Hőmérséklet automatikus lekérdezése'),
+      desc: t('Az Aktivitás/hőség blokk megjelenésekor a készülék helye alapján automatikusan lekéri az aktuális hőmérsékletet. Kikapcsolva a korábbi, kézi „Lekérdezés" gombos működés marad.'),
+      nav: { view: 'add' }
      }
     ].map(o => h('div', {
       key: o.k,
@@ -10779,6 +11303,44 @@ function Settings({
      )
     )
    ),
+   /* ═══ v20 (új, Zoltán kérésére): HAJNALI JELENSÉG / SOMOGYI-HATÁS ELEMZÉS
+      IDŐABLAKA — csak a felismerés ablakát állítja, a végeredmény a Statisztika
+      oldalon és az Orvosi riportban jelenik meg, kizárólag tájékoztató jelleggel. */
+   h('div', {
+     className: 'grid md:grid-cols-2 gap-4 mb-4'
+    },
+    h('div', null,
+     h('label', {
+      className: 'text-sm font-bold text-amber-700 block mb-1'
+     }, '🌅 ' + window.t('Hajnali időszak kezdete')),
+     h('input', {
+      type: 'time',
+      value: s.dawnStart || '03:00',
+      onChange: e => setS(p => ({
+       ...p,
+       dawnStart: e.target.value || '03:00'
+      })),
+      className: fi
+     })
+    ),
+    h('div', null,
+     h('label', {
+      className: 'text-sm font-bold text-amber-700 block mb-1'
+     }, '🌅 ' + window.t('Hajnali időszak vége')),
+     h('input', {
+      type: 'time',
+      value: s.dawnEnd || '08:00',
+      onChange: e => setS(p => ({
+       ...p,
+       dawnEnd: e.target.value || '08:00'
+      })),
+      className: fi
+     })
+    )
+   ),
+   h('p', {
+    className: 'text-xs text-gray-400 mb-4 -mt-2'
+   }, window.t('Ebben az időszakban rögzített vércukormérésekből ismeri fel az app a hajnali jelenség/Somogyi-hatás gyanús eseteit (l. Statisztika oldal + Orvosi riport) — kizárólag tájékoztató jelleggel, nem ad automatikus dózisjavaslatot.')),
    h('div', null,
     h('label', {
      className: 'text-sm font-bold text-indigo-700 block mb-1'

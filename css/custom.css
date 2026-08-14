@@ -1,4 +1,61 @@
 
+/* ═══════════ v20.2 (korrekció, kiegészítés) — TOVÁBBI HIÁNYZÓ TAILWIND-OSZTÁLYOK
+   A TELJES ALKALMAZÁSBAN ═══════════
+   A responsive-ellenőrzés kapcsán feltárt hibát (lásd lentebb, .hbc-fooditem-*
+   és .hbc-mobile-only/.hbc-desktop-only szabályok) egy teljes, programmatikus
+   ellenőrzéssel átvizsgáltam az egész app.js forrásra: az ott ténylegesen
+   használt ~330 CSS-osztályból még kb. 40 további hiányzott a lefordított
+   app.css-ből (Zoltán kifejezett kérésére javítva). Ezek jellemzően kisebb,
+   önmagukban nem "törő" jellegű stílusok voltak (kurzor, hover/focus
+   visszajelzés, betűforma, kisebb térközök) — de mind ténylegesen használt,
+   érvényes osztály volt a forráskódban, csak hatástalan. Minden érintett
+   helyen saját osztályra cserélve (app.js), az app.css-t nem kellett
+   újrafordítani. Színek/méretek a Tailwind alapértelmezett skálájából, a
+   ténylegesen a forrásban megadott érték szerint. */
+.hbc-mt-neg2{margin-top:-.5rem}
+.hbc-accent-amber{accent-color:#d97706}
+.hbc-accent-emerald{accent-color:#059669}
+.hbc-accent-gray{accent-color:#4b5563}
+.hbc-accent-yellow{accent-color:#ca8a04}
+.hbc-bg-white-70{background-color:rgba(255,255,255,.7)}
+.hbc-border-t-2{border-top-width:2px;border-top-style:solid}
+.hbc-cursor-pointer{cursor:pointer}
+.hbc-flex-col{flex-direction:column}
+.hbc-focus-border-emerald-400:focus{border-color:#34d399}
+.hbc-focus-border-indigo-500:focus{border-color:#6366f1}
+.hbc-focus-border-purple-400:focus{border-color:#c084fc}
+.hbc-focus-border-teal-400:focus{border-color:#2dd4bf}
+.hbc-focus-border-yellow-500:focus{border-color:#eab308}
+.hbc-gap-0-5{gap:.125rem}
+.hbc-grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.hbc-grid-cols-3-auto{grid-template-columns:1fr 1fr 1fr auto}
+.hbc-hover-bg-blue-200:hover{background-color:#bfdbfe}
+.hbc-hover-bg-emerald-200:hover{background-color:#a7f3d0}
+.hbc-hover-bg-yellow-100:hover{background-color:#fef9c3}
+.hbc-hover-text-indigo-500:hover{color:#6366f1}
+.hbc-hover-text-indigo-800:hover{color:#3730a3}
+.hbc-hover-text-purple-600:hover{color:#9333ea}
+.hbc-hover-text-red-700:hover{color:#b91c1c}
+.hbc-inline-flex{display:inline-flex}
+.hbc-items-stretch{align-items:stretch}
+.hbc-justify-around{justify-content:space-around}
+.hbc-leading-none{line-height:1}
+.hbc-leading-snug{line-height:1.375}
+.hbc-max-h-40{max-height:10rem}
+.hbc-max-h-96{max-height:24rem}
+.hbc-mb-0-5{margin-bottom:.125rem}
+.hbc-min-h-44{min-height:44px}
+.hbc-ml-7{margin-left:1.75rem}
+.hbc-mt-0-5{margin-top:.125rem}
+.hbc-pl-2{padding-left:.5rem}
+.hbc-pt-3{padding-top:.75rem}
+.hbc-space-y-1-5>*+*{margin-top:.375rem}
+.hbc-text-right{text-align:right}
+.hbc-tracking-wide{letter-spacing:.025em}
+.hbc-underline{text-decoration-line:underline}
+.hbc-uppercase{text-transform:uppercase}
+.hbc-whitespace-pre-wrap{white-space:pre-wrap}
+
 *{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
 html,body{font-family:'Nunito',sans-serif;background:#eef2ff;margin:0;padding:0}
 @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.55}}
@@ -14,6 +71,39 @@ input[type=date],input[type=datetime-local]{color-scheme:light}
 .ti{background:#e0e7ff;color:#4338ca}
 .chart-container{position:relative;height:260px;width:100%}
 @media(min-width:768px){.chart-container{height:360px}}
+
+/* ═══════════ v20.2 (korrekció, feladat 1) — MOBIL/ASZTALI NAVIGÁCIÓ VÁLTÁSA
+   ÉS RÖGZÍTETT (fixed) SÁVOK POZICIONÁLÁSA ═══════════
+   A responsive-ellenőrzés során kiderült, hogy az app.css (előre lefordított,
+   purge-olt Tailwind-készlet) jó néhány, a forráskódban ténylegesen használt
+   segédosztályt NEM tartalmaz — ezek feltehetően egy korábbi purge-lépésnél
+   maradtak ki, és a fordítás azóta nem lett újragenerálva. Ami ezt érinti:
+   "md:hidden"/"md:block" (+ "md:gap-3", "md:grid-cols-5", "md:bottom-5",
+   "md:pb-6"), valamint a rögzített sávok pozicionálásához szükséges
+   "bottom-0", "left-0", "right-0", "inset-x-0", "bottom-20", "z-[95]",
+   "bg-black/40" és a mobil tartalom alsó térközéhez szükséges "pb-28".
+   Hatás: az asztali felső navigáció (lapfül-sáv, SOS/➕Új gombok) 768px
+   fölött SOHA nem jelent meg; a mobil hamburger-gomb és az alsó mobil
+   navigáció 768px fölött (asztali nézetben) IS megjelent; az alsó mobil
+   navigáció és a mobil menü nem volt a képernyő aljához/széléhez rögzítve;
+   mobilon a tartalom alja a rögzített alsó navigáció ALÁ lóghatott. Javítás:
+   saját, nem purge-olt osztályok — a navigáció-váltáshoz ugyanazzal a 768px
+   töréspontal, amit a fenti .chart-container szabály is használ. */
+.hbc-mobile-only{display:block}
+.hbc-desktop-only{display:none}
+@media(min-width:768px){
+ .hbc-mobile-only{display:none!important}
+ .hbc-desktop-only{display:block!important}
+ .hbc-md-gap-3{gap:.75rem}
+ .hbc-md-grid-cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+}
+.hbc-fixed-bnav{position:fixed;bottom:0;left:0;right:0}
+.hbc-fixed-overlay{position:fixed;left:0;right:0;bottom:0;z-index:95}
+.hbc-overlay-dim{background:rgba(0,0,0,.4)}
+.hbc-toast-bottom{bottom:5rem}
+@media(min-width:768px){.hbc-toast-bottom{bottom:1.25rem}}
+.hbc-content-pb{padding-bottom:7rem}
+@media(min-width:768px){.hbc-content-pb{padding-bottom:1.5rem}}
 
 /* ═══════════ v9 — TypeOneDiab LOGÓ ═══════════
    Mobil: a max. méret a fejlécben rendelkezésre álló helyhez igazodik.
@@ -282,7 +372,43 @@ html.hbc-bigfont .text-\[10px\],html.hbc-bigfont .text-\[11px\]{font-size:.75rem
 .hbc-fooditem-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
 .hbc-fooditem-name{flex:1 1 140px;min-width:140px}
 .hbc-fooditem-name p{overflow-wrap:break-word;word-break:break-word}
-.hbc-fooditem-ctrls{display:flex;align-items:center;gap:.25rem;flex-shrink:0}
+.hbc-fooditem-ctrls{display:flex;align-items:center;gap:.25rem;flex-shrink:0;flex-wrap:wrap}
+
+/* ═══════════ v20.2 (korrekció, feladat 1) — ÉTELTÉTEL-SOR MEZŐINEK SZÉLESSÉGE
+   ÉS MOBIL TÖRDELÉSE ═══════════
+   A v20.1-ben bevezetett mező-szélességek Tailwind "w-14"/"w-16"/"w-24"
+   segédosztályokkal voltak megadva — ezek az osztályok azonban NEM szerepelnek
+   az app.css előre lefordított (purge-olt) készletében (csak a ténylegesen a
+   forráskódban eredetileg is használt w-5/w-10/w-20/w-full létezik), ezért a
+   mezők szélesség-stílus NÉLKÜL jelentek meg: böngésző-alapértelmezett
+   (jellemzően túl széles) számmezők, amik mobilon kilógtak a kártyából, és
+   asztali nézetben is esetlegesen, foltosan törtek sort. Megoldás: saját,
+   nem purge-olt osztályok fix rem-szélességgel — desktopon kompakt, egy
+   sorban elférő mezők; 480px alatt (kis mobil, álló nézet) a teljes sor
+   oszloppá rendeződik, a vezérlők pedig szabadon tördelődnek, hogy semmi ne
+   lógjon ki. */
+.hbc-fooditem-mode{width:3.8rem;flex:0 0 auto}
+.hbc-fooditem-amt{width:4.6rem;flex:0 0 auto}
+.hbc-fooditem-rate{width:4.6rem;flex:0 0 auto}
+@media (max-width:480px){
+ .hbc-fooditem-row{flex-direction:column;align-items:stretch}
+ .hbc-fooditem-name{min-width:0;width:100%}
+ .hbc-fooditem-ctrls{width:100%;justify-content:flex-start}
+ .hbc-fooditem-mode{width:3.6rem;flex:1 1 3.6rem}
+ .hbc-fooditem-amt,.hbc-fooditem-rate{flex:1 1 4.2rem;width:auto;min-width:3.6rem}
+}
+
+/* ═══════════ v20.2 (korrekció, feladat 1) — TOVÁBBI, UGYANEZZEL A HIBÁVAL
+   ÉRINTETT MEZŐK ═══════════
+   Az általános responsive-ellenőrzés során ugyanezt a hibát (nem létező
+   Tailwind w-14/w-16/w-24 osztály → szélesség-stílus nélküli mező) még három
+   helyen találtam: a Statisztika "egyéni nap" mezőjénél, a Tevékenység
+   "Pontos kezdés/befejezés" címkéinél, és az Aktivitás/hőség profil
+   hőmérséklet-mezőjénél (mindkét — Új bejegyzés és Szerkesztés — helyen).
+   Ugyanazzal a mintával javítva. */
+.hbc-w14{width:3.5rem}
+.hbc-w16{width:4.5rem}
+.hbc-w24{width:6rem}
 
 /* ═══════════ v18.7 (feladat 5) / v18.8 (feladat 1) / v18.9 (korrekció) —
    BEJEGYZÉS-KÁRTYÁK (Áttekintés "Mai bejegyzések" ÉS Bejegyzések/Napló oldal) ═══════════

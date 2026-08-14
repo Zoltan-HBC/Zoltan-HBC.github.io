@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '20.1';
+const APP_VERSION = '20.2';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -3869,7 +3869,7 @@ function InsTimeField({
    className: 'mt-1'
   },
   h('label', {
-   className: 'text-[11px] font-bold text-indigo-500 block mb-0.5'
+   className: 'text-[11px] font-bold text-indigo-500 block hbc-mb-0-5'
   }, '⏰ ' + window.t(openLabel)),
   h('div', {
     className: 'flex gap-1'
@@ -3878,7 +3878,7 @@ function InsTimeField({
     type: 'datetime-local',
     value,
     onChange: e => onChange(e.target.value),
-    className: 'flex-1 min-w-0 border-2 border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-indigo-500'
+    className: 'flex-1 min-w-0 border-2 border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none hbc-focus-border-indigo-500'
    }),
    h('button', {
     type: 'button',
@@ -3953,25 +3953,60 @@ function preserveTimesOnShift(p, newTimestamp) {
  };
 }
 window.preserveTimesOnShift = preserveTimesOnShift;
-/* v20 (feladat 4): egy tábla-tétel "unit" mezőjéből (pl. "1 vékony szelet (30 g)")
-   megpróbálja kiolvasni a tipikus grammértéket — ez csak a gramm mező kiinduló
-   előtöltéséhez kell, a tényleges gramm mennyiség mindig szabadon felülírható. */
+/* v20.2 (feladat 1–3, korrekció): egy tábla-tétel "unit" mezőjéből (pl. "1 vékony
+   szelet (30 g)") megpróbálja kiolvasni a tipikus grammértéket — ez csak a súly
+   mező kiinduló előtöltéséhez kell, a tényleges mennyiség mindig szabadon
+   felülírható. */
 function parseGramsFromUnit(unit) {
  if (!unit) return null;
  const m = String(unit).match(/(\d+(?:[.,]\d+)?)\s*g\b/i);
  return m ? parseFloat(m[1].replace(',', '.')) : null;
 }
 window.parseGramsFromUnit = parseGramsFromUnit;
-/* v20 (feladat 2): egy ételsor végleges CH(g) értéke — elsődlegesen a súly (g) és a
-   szénhidráttartalom (g CH/100g, a csomagolás/tápértéktáblázat szerinti arányszám)
-   szorzatából számolt érték: grams × chPer100 ÷ 100. Ez felel meg a magyar
-   élelmiszer-csomagolásokon megszokott "100 g-ban" jelölésnek, és a felhasználó
-   számára ez a legkönnyebben leolvasható/beírható adat.
+/* v20.2 (új, Zoltán kérésére): ugyanez folyadékokra — "dl"/"l" → ml-re váltva,
+   "ml" közvetlenül. A dl a magyar konyhai gyakorlatban megszokott, de a
+   csomagolásokon/tápértéktáblázatokban a szénhidrát szinte mindig "100 ml"-re
+   vetítve szerepel (100 ml = 1 dl) — ezért a mennyiséget ml-ben, a rátát
+   CH/100ml-ben kérjük, hogy közvetlenül a csomagolásról leolvasható legyen. */
+function parseMlFromUnit(unit) {
+ if (!unit) return null;
+ const u = String(unit);
+ const mDl = u.match(/(\d+(?:[.,]\d+)?)\s*dl\b/i);
+ if (mDl) return parseFloat(mDl[1].replace(',', '.')) * 100;
+ const mMl = u.match(/(\d+(?:[.,]\d+)?)\s*ml\b/i);
+ if (mMl) return parseFloat(mMl[1].replace(',', '.'));
+ const mL = u.match(/(\d+(?:[.,]\d+)?)\s*l\b/i);
+ if (mL) return parseFloat(mL[1].replace(',', '.')) * 1000;
+ return null;
+}
+window.parseMlFromUnit = parseMlFromUnit;
+/* v20.2 (új, Zoltán kérésére): felismeri, hogy egy étel/adatbázis-tétel súly (g),
+   folyadék (ml) vagy darab/adag ("count" — sem súly, sem térfogat nem olvasható ki,
+   pl. "1 db", "1 adag", "1 evőkanál") alapú-e, a "unit" szövegéből. Ez adja az
+   ételsor mezőinek KIINDULÓ módját — a felhasználó a legördülő menüvel bármikor
+   felülbírálhatja (pl. ha lemérte az "1 adag"-ot magának). */
+function detectUnitKind(unit) {
+ if (parseMlFromUnit(unit) != null) return 'ml';
+ if (parseGramsFromUnit(unit) != null) return 'g';
+ return 'count';
+}
+window.detectUnitKind = detectUnitKind;
+/* v20.2 (feladat 2): egy ételsor végleges CH(g) értéke.
+   - "g"/"ml" mód: súly/mennyiség × CH/100g vagy CH/100ml ÷ 100 — ez felel meg a
+     magyar élelmiszer-csomagolásokon megszokott "100 g-ban"/"100 ml-ben" jelölésnek.
+   - "count" mód (darab/adag/evőkanál stb., ahol nincs súly/térfogat-adat): a
+     táblázat/adatbázis szerinti CH × darabszám (qty) — ez a korábbi (v19 és
+     korábbi) "szorzós" modellel egyezik meg, mert ezeknél a tételeknél nincs
+     értelmezhető "100 g/ml-enkénti" arányszám.
    Visszafelé kompatibilis a korábbi verziókkal: ha egy régi bejegyzésen még csak a
    közvetlenül megadott végső CH (carbsFinal) vagy — még korábbi — a szorzós (mult)
    modell szerinti adat szerepel, abból számol. */
 function foodLineCH(f) {
  if (!f) return 0;
+ if (f.unitKind === 'count') {
+  const qty = (f.qty != null && f.qty !== '') ? parseFloat(f.qty) : 1;
+  return (parseFloat(f.carbs) || 0) * (isNaN(qty) ? 1 : qty);
+ }
  if (f.grams != null && f.grams !== '' && f.chPer100 != null && f.chPer100 !== '') {
   return (parseFloat(f.grams) || 0) * (parseFloat(f.chPer100) || 0) / 100;
  }
@@ -3981,17 +4016,18 @@ function foodLineCH(f) {
  return base * mult;
 }
 window.foodLineCH = foodLineCH;
-/* v20 (feladat 2): egy tábla-/adatbázis-tétel "carbs" (tipikus adagra vetített CH) és
-   "unit" (a tipikus adag, grammban kiolvasható, ha ismert) mezőjéből számolt
-   CH/100g becslés — ez csak a mező KIINDULÓ előtöltéséhez kell, szabadon felülírható.
-   Ha a tétel mértékegysége nem grammalapú (pl. "1 dl", "1 db" ismert súly nélkül),
-   nem lehet belőle CH/100g-ot számolni — ilyenkor null-t ad vissza, a mezőt a
-   felhasználónak kell kitöltenie a csomagolás/tápértéktáblázat alapján. */
-function chPer100FromFood(f) {
- const g = parseGramsFromUnit(f && f.unit);
+/* v20.2: egy tábla-/adatbázis-tétel "carbs" (tipikus adagra vetített CH) és "unit"
+   (a tipikus adag, súlyban/térfogatban kiolvasható, ha ismert) mezőjéből számolt
+   CH/100g VAGY CH/100ml becslés — ez csak a mező KIINDULÓ előtöltéséhez kell,
+   szabadon felülírható. Ha a tétel mértékegysége se nem súly-, se nem
+   térfogatalapú (pl. "1 db", "1 adag" ismert súly/térfogat nélkül), nem lehet
+   belőle rátát számolni — ilyenkor null-t ad vissza ("count" módban nincs is
+   szükség rá, l. foodLineCH). */
+function chPer100FromFood(f, kind) {
+ const amt = kind === 'ml' ? parseMlFromUnit(f && f.unit) : parseGramsFromUnit(f && f.unit);
  const c = parseFloat(f && f.carbs) || 0;
- if (!g || g <= 0) return null;
- return Math.round((c / g * 100) * 10) / 10;
+ if (!amt || amt <= 0) return null;
+ return Math.round((c / amt * 100) * 10) / 10;
 }
 window.chPer100FromFood = chPer100FromFood;
 
@@ -4260,7 +4296,7 @@ function EntryCard({
     _ro ?
     h('button', {
      onClick: () => onEdit(entry),
-     className: 'p-2 text-purple-400 hover:text-purple-600 rounded-lg',
+     className: 'p-2 text-purple-400 hbc-hover-text-purple-600 rounded-lg',
      type: 'button',
      title: 'Részletek megtekintése',
      'aria-label': 'Részletek megtekintése'
@@ -4274,7 +4310,7 @@ function EntryCard({
         (ceruza) ettől függetlenül, változatlanul elérhető marad. */
      onView && h('button', {
       onClick: () => onView(entry),
-      className: 'p-2 text-purple-400 hover:text-purple-600 rounded-lg',
+      className: 'p-2 text-purple-400 hbc-hover-text-purple-600 rounded-lg',
       type: 'button',
       title: 'Részletek megtekintése',
       'aria-label': 'Részletek megtekintése'
@@ -4549,7 +4585,7 @@ function Dashboard({
       className: 'text-xs font-bold text-indigo-400'
      }, '⭕ ' + window.t('Mai naplózási kör')),
      lastWeightEntry && h('p', {
-      className: 'md:hidden text-xs font-bold text-indigo-500 whitespace-nowrap'
+      className: 'hbc-mobile-only text-xs font-bold text-indigo-500 whitespace-nowrap'
      }, '⚖️ ' + parseFloat(lastWeightEntry.weight).toFixed(1) + ' kg')
     ),
     h('div', {
@@ -4570,7 +4606,7 @@ function Dashboard({
       }))
     ),
     lastWeightEntry && h('p', {
-     className: 'hidden md:block text-xs font-bold text-indigo-500 mt-2'
+     className: 'hbc-desktop-only text-xs font-bold text-indigo-500 mt-2'
     }, '⚖️ ' + parseFloat(lastWeightEntry.weight).toFixed(1) + ' kg' + ' · ' + fmtDatePrefix(lastWeightEntry.timestamp))
    ),
    h('div', {
@@ -6612,7 +6648,7 @@ function Statistics({
     )
    ),
    dawn.events.length > 0 && h('div', {
-     className: 'max-h-40 overflow-y-auto space-y-1 mb-2'
+     className: 'hbc-max-h-40 overflow-y-auto space-y-1 mb-2'
     },
     dawn.events.slice().reverse().map(ev => h('p', {
      key: ev.date,
@@ -6660,7 +6696,7 @@ function Statistics({
 
   // KPI-k (v8: + GMI)
   h('div', {
-    className: 'grid grid-cols-2 md:grid-cols-5 gap-3'
+    className: 'grid grid-cols-2 hbc-md-grid-cols-5 gap-3'
    },
    [{
      label: 'Átlag VC',
@@ -6814,7 +6850,7 @@ function Statistics({
      step: 1,
      value: actAnalysisDays,
      onChange: e => updateActCfg({ actAnalysisDays: Math.max(1, parseInt(e.target.value) || 1) }),
-     className: 'w-16 border-2 border-teal-200 rounded-xl px-2 py-1 text-sm focus:outline-none'
+     className: 'hbc-w16 border-2 border-teal-200 rounded-xl px-2 py-1 text-sm focus:outline-none'
     }),
     h('span', {
      className: 'text-xs text-gray-400'
@@ -6827,7 +6863,7 @@ function Statistics({
      className: 'mb-3'
     },
     h('summary', {
-     className: 'text-xs font-bold text-teal-600 cursor-pointer select-none'
+     className: 'text-xs font-bold text-teal-600 hbc-cursor-pointer select-none'
     }, '⚙️ ' + window.t('Számítás finomhangolása')),
     h('div', {
       className: 'mt-2 p-3 rounded-xl bg-teal-50/60 border border-teal-200 space-y-2'
@@ -6908,7 +6944,7 @@ function Statistics({
      }, window.t('Átlagos vércukor-elmozdulás a mérés után') + `: ${g.avgDelta > 0 ? '+' : ''}${g.avgDelta.toFixed(1)} ${window.bgU.label()}`),
      /* v19.3: pontosan miből (mennyi és milyen időszakú mérésből) jött az átlag */
      h('p', {
-      className: 'text-[11px] text-gray-400 mt-0.5'
+      className: 'text-[11px] text-gray-400 hbc-mt-0-5'
      }, g.n === 1 ? window.t('1 mérésből') + ' (' + fmtDatePrefix(g.first) + ')' :
       window.t('mérésekből') + ': ' + fmtDatePrefix(g.first) + ' – ' + fmtDatePrefix(g.last)),
      g.n < 3 ? h('p', {
@@ -6970,7 +7006,7 @@ function Statistics({
        setSendMsg(null);
        setRepPanel(p => !p);
       },
-      className: 'font-bold text-white px-5 py-2.5 rounded-xl text-sm shadow-lg inline-flex items-center gap-2 min-h-[44px]',
+      className: 'font-bold text-white px-5 py-2.5 rounded-xl text-sm shadow-lg hbc-inline-flex items-center gap-2 hbc-min-h-44',
       style: {
        background: 'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'
       }
@@ -7015,7 +7051,7 @@ function Statistics({
       onSaveDocEmails && h('button', {
        type: 'button',
        onClick: () => setEditList(v => !v),
-       className: 'text-xs font-bold text-indigo-600 hover:text-indigo-800'
+       className: 'text-xs font-bold text-indigo-600 hbc-hover-text-indigo-800'
       }, editList ? '✅ ' + window.t('Kész') : '✏️ ' + window.t('Szerkesztés'))
      ),
      h('div', {
@@ -7023,18 +7059,18 @@ function Statistics({
       },
       _emails.map(em => h('span', {
         key: em,
-        className: 'inline-flex items-center gap-1 bg-white border border-indigo-200 rounded-xl px-2 py-1 text-xs font-bold text-indigo-800'
+        className: 'hbc-inline-flex items-center gap-1 bg-white border border-indigo-200 rounded-xl px-2 py-1 text-xs font-bold text-indigo-800'
        },
        h('button', {
         type: 'button',
         onClick: () => setDocMail(em),
-        className: 'hover:text-indigo-500',
+        className: 'hbc-hover-text-indigo-500',
         title: window.t('Cím kiválasztása')
        }, em),
        editList && h('button', {
         type: 'button',
         onClick: () => onSaveDocEmails(_emails.filter(x => x !== em)),
-        className: 'text-red-500 hover:text-red-700 font-black',
+        className: 'text-red-500 hbc-hover-text-red-700 font-black',
         title: window.t('Törlés'),
         'aria-label': window.t('Törlés')
        }, '✕')
@@ -7051,7 +7087,7 @@ function Statistics({
        type: 'button',
        disabled: !validMail || sending,
        onClick: doSend,
-       className: 'font-bold text-white px-5 py-2.5 rounded-xl text-sm shadow-lg inline-flex items-center gap-2 min-h-[44px]' + ((!validMail || sending) ? ' opacity-50' : ''),
+       className: 'font-bold text-white px-5 py-2.5 rounded-xl text-sm shadow-lg hbc-inline-flex items-center gap-2 hbc-min-h-44' + ((!validMail || sending) ? ' opacity-50' : ''),
        style: {
         background: 'linear-gradient(135deg,#059669,#10b981)'
        }
@@ -7059,7 +7095,7 @@ function Statistics({
      h('button', {
        type: 'button',
        onClick: () => generateDoctorReport(entries, settings, repF, repT),
-       className: 'font-bold px-5 py-2.5 rounded-xl text-sm border-2 border-indigo-300 text-indigo-700 inline-flex items-center gap-2 min-h-[44px] bg-white'
+       className: 'font-bold px-5 py-2.5 rounded-xl text-sm border-2 border-indigo-300 text-indigo-700 hbc-inline-flex items-center gap-2 hbc-min-h-44 bg-white'
       }, '🖨️ ' + window.t('PDF / Nyomtatás'))
     ),
     sendMsg && h('p', {
@@ -7313,26 +7349,26 @@ function FoodManager({
     h('button', {
      type: 'button',
      onClick: () => setChCat(''),
-     className: `px-3 py-1.5 rounded-xl text-xs font-bold ${chCat===''?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+     className: `px-3 py-1.5 rounded-xl text-xs font-bold ${chCat===''?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hbc-hover-bg-emerald-200'}`
     }, '✅ ' + window.t('Mind')),
     chCats.map(c => h('button', {
      type: 'button',
      key: c,
      onClick: () => setChCat(chCat === c ? '' : c),
-     className: `px-3 py-1.5 rounded-xl text-xs font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+     className: `px-3 py-1.5 rounded-xl text-xs font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hbc-hover-bg-emerald-200'}`
     }, window.t(c)))),
    openChTable && h('input', {
     type: 'text',
     value: chSearch,
     onChange: e => setChSearch(e.target.value),
     placeholder: '🔍 ' + window.t('Keresés a táblázatban...'),
-    className: 'w-full border-2 border-emerald-200 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none focus:border-emerald-400'
+    className: 'w-full border-2 border-emerald-200 rounded-xl px-3 py-2 text-sm mb-2 focus:outline-none hbc-focus-border-emerald-400'
    }),
    openChTable && h('p', {
     className: 'text-xs text-emerald-600 font-bold mb-2'
    }, `${chShown.length} ${window.t('tétel látható')}`),
    openChTable && h('div', {
-     className: 'max-h-96 overflow-y-auto space-y-1'
+     className: 'hbc-max-h-96 overflow-y-auto space-y-1'
     },
     chShown.map(f => h('div', {
       key: f.id,
@@ -7466,7 +7502,7 @@ function ActivityFields({
      className: 'w-full border-2 border-yellow-300 rounded-xl px-3 py-2 text-sm mb-1 focus:outline-none bg-white'
     }),
     h('div', {
-      className: 'max-h-40 overflow-y-auto space-y-1 bg-white rounded-xl border border-yellow-200 p-1'
+      className: 'hbc-max-h-40 overflow-y-auto space-y-1 bg-white rounded-xl border border-yellow-200 p-1'
      },
      namesShown.length === 0 ? h('p', {
       className: 'text-[11px] text-gray-400 px-2 py-1'
@@ -7475,7 +7511,7 @@ function ActivityFields({
       type: 'button',
       key: n,
       onClick: () => addName(n),
-      className: 'w-full text-left px-2 py-1 rounded-lg text-xs font-bold text-yellow-800 hover:bg-yellow-100' + (cur.includes(n) ? ' opacity-40' : '')
+      className: 'w-full text-left px-2 py-1 rounded-lg text-xs font-bold text-yellow-800 hbc-hover-bg-yellow-100' + (cur.includes(n) ? ' opacity-40' : '')
      }, (cur.includes(n) ? '✓ ' : '➕ ') + n))
     )
    ),
@@ -7508,7 +7544,7 @@ function ActivityFields({
      ...p,
      activityDur: parseInt(e.target.value) || 0
     })),
-    className: 'w-full accent-yellow-600',
+    className: 'w-full hbc-accent-yellow',
     style: {
      minHeight: '30px'
     }
@@ -7523,32 +7559,32 @@ function ActivityFields({
     className: 'mt-2 w-full text-left text-xs font-bold text-yellow-700 bg-yellow-100 border border-yellow-300 rounded-lg px-2 py-1.5'
    }, '⏰ ' + window.t('Pontos kezdés/befejezés megadása')),
    exact && h('div', {
-     className: 'mt-1 space-y-1.5'
+     className: 'mt-1 hbc-space-y-1-5'
     },
     h('div', {
       className: 'flex gap-1 items-center'
      },
      h('span', {
-      className: 'text-[11px] font-bold text-yellow-700 w-14 shrink-0'
+      className: 'text-[11px] font-bold text-yellow-700 hbc-w14 shrink-0'
      }, window.t('Kezdete')),
      h('input', {
       type: 'datetime-local',
       value: rangeFrom,
       onChange: e => setExactFrom(e.target.value),
-      className: 'flex-1 min-w-0 border-2 border-yellow-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-yellow-500'
+      className: 'flex-1 min-w-0 border-2 border-yellow-300 rounded-lg px-2 py-1 text-xs focus:outline-none hbc-focus-border-yellow-500'
      })
     ),
     h('div', {
       className: 'flex gap-1 items-center'
      },
      h('span', {
-      className: 'text-[11px] font-bold text-yellow-700 w-14 shrink-0'
+      className: 'text-[11px] font-bold text-yellow-700 hbc-w14 shrink-0'
      }, window.t('Vége')),
      h('input', {
       type: 'datetime-local',
       value: rangeTo,
       onChange: e => setExactTo(e.target.value),
-      className: 'flex-1 min-w-0 border-2 border-yellow-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-yellow-500'
+      className: 'flex-1 min-w-0 border-2 border-yellow-300 rounded-lg px-2 py-1 text-xs focus:outline-none hbc-focus-border-yellow-500'
      }),
      h('button', {
       type: 'button',
@@ -7565,7 +7601,7 @@ function ActivityFields({
     className: 'text-sm font-bold text-yellow-800 block mb-1'
    }, '⚡ ' + window.t('Fizikai aktivitás (1–5)') + (lvl > 0 ? ': ' + actLevelName(settings, lvl) : '')),
    h('div', {
-     className: 'grid grid-cols-5 gap-1'
+     className: 'grid hbc-grid-cols-5 gap-1'
     },
     [1, 2, 3, 4, 5].map(n => h('button', {
      type: 'button',
@@ -7658,15 +7694,21 @@ function AddEntry({
  /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
     Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
  const addFoodToForm = (f, mult = 1) => setForm(p => {
-  /* v20 (feladat 2): az ételsor Idő / Súly (g) / CH(100g) / Törlés mezőkkel kerül
-     a bejegyzésbe — az adatbázis-tétel alapján kiolvasható tipikus súly és CH/100g
-     csak KIINDULÓ előtöltésként szolgál, bármikor szabadon felülírható. */
-  const baseG = parseGramsFromUnit(f.unit);
+  /* v20.2 (korrekció): az ételsor Idő / Mód (g·ml·db) / Mennyiség / Ráta / Törlés
+     mezőkkel kerül a bejegyzésbe. A módot az adatbázis-tétel "unit"-jából ismerjük
+     fel (súly, folyadék, vagy — ha egyik sem olvasható ki — darab/adag); ez csak
+     KIINDULÓ állapot, a legördülővel bármikor átváltható, a mennyiség/ráta pedig
+     szabadon felülírható. "db" módban a ×1/×2/×3 gomb a darabszámot (qty) állítja
+     — ugyanúgy, mint korábban a szorzó. */
+  const kind = detectUnitKind(f.unit);
+  const baseAmt = kind === 'ml' ? parseMlFromUnit(f.unit) : kind === 'g' ? parseGramsFromUnit(f.unit) : null;
   const foods = [...p.foods, {
    ...f,
    fid: Date.now(),
-   grams: baseG != null ? baseG * mult : null,
-   chPer100: chPer100FromFood(f)
+   unitKind: kind,
+   grams: (kind !== 'count' && baseAmt != null) ? baseAmt * mult : null,
+   chPer100: kind !== 'count' ? chPer100FromFood(f, kind) : null,
+   qty: kind === 'count' ? mult : null
   }];
   const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
@@ -7703,6 +7745,33 @@ function AddEntry({
   foods: p.foods.map(f => f.fid === fid ? {
    ...f,
    chPer100: val === '' ? null : parseFloat(val)
+  } : f)
+ }));
+ /* v20.2 (új, Zoltán kérésére): a mód (g/ml/db) kézi felülbírálása — ha a
+    felismerés téves, vagy a felhasználó másképp szeretné megadni (pl. lemérte
+    az "1 adag"-ot), a legördülővel átválthatja. Váltáskor a mennyiség/ráta az
+    adatbázis-tétel alapján töltődik újra elő, utána szabadon módosítható. */
+ const setFoodUnitKind = (fid, kind) => setForm(p => ({
+  ...p,
+  foods: p.foods.map(f => {
+   if (f.fid !== fid) return f;
+   const baseAmt = kind === 'ml' ? parseMlFromUnit(f.unit) : kind === 'g' ? parseGramsFromUnit(f.unit) : null;
+   return {
+    ...f,
+    unitKind: kind,
+    grams: kind !== 'count' ? baseAmt : null,
+    chPer100: kind !== 'count' ? chPer100FromFood(f, kind) : null,
+    qty: kind === 'count' ? 1 : null
+   };
+  })
+ }));
+ /* v20.2 (korrekció, feladat 3): "db" módban a darabszám (qty) — ez a régi
+    ×1/×2/×3 szorzó szerepét veszi át, itt utólag is szabadon módosítható. */
+ const setFoodQty = (fid, val) => setForm(p => ({
+  ...p,
+  foods: p.foods.map(f => f.fid === fid ? {
+   ...f,
+   qty: val === '' ? null : parseFloat(val)
   } : f)
  }));
  /* v18.4: tételenkénti CH-időpont ("ÓÓ:PP"); ha a bejegyzés idejével azonos, töröljük */
@@ -7941,7 +8010,7 @@ function AddEntry({
         bloodGlucoseTime: p.bloodGlucoseTime || p.timestamp
        })),
        msg => showAlert && showAlert('📶 ' + msg)),
-      className: 'px-3 py-2 rounded-xl text-sm font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 whitespace-nowrap'
+      className: 'px-3 py-2 rounded-xl text-sm font-bold bg-blue-100 text-blue-700 hbc-hover-bg-blue-200 whitespace-nowrap'
      }, '📶 BT')),
     (settings && settings.featBT !== false) && window.HBC_BT && !window.HBC_BT.supported() && h('p', {
      className: 'text-[11px] text-gray-400 mt-1'
@@ -8073,7 +8142,7 @@ function AddEntry({
      ),
      /* ═══ v18 (6.1): BEÉPÍTETT MAGYAR CH-TÁBLÁZAT — v18.2: kategória-gombok ═══ */
      chTableOn && h('div', {
-       className: 'mt-3 pt-3 border-t-2 border-emerald-200'
+       className: 'mt-3 hbc-pt-3 hbc-border-t-2 border-emerald-200'
       },
       h('p', {
         className: 'text-xs font-black text-emerald-700 mb-2'
@@ -8087,7 +8156,7 @@ function AddEntry({
         type: 'button',
         key: c,
         onClick: () => setChCat(chCat === c ? '' : c),
-        className: `px-2 py-1 rounded-lg text-[11px] font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+        className: `px-2 py-1 rounded-lg text-[11px] font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hbc-hover-bg-emerald-200'}`
        }, window.t(c)))),
       chHits.length === 0 && _chq.length < 2 ?
       h('p', {
@@ -8121,7 +8190,7 @@ function AddEntry({
            unit: f.unit,
            isDefault: false
           }, n),
-          className: 'bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold hover:bg-emerald-200'
+          className: 'bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold hbc-hover-bg-emerald-200'
          }, `${n}×`))
         )
        )),
@@ -8158,34 +8227,57 @@ function AddEntry({
         title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
         className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
        }),
-       /* v20 (feladat 2): Súly (g) + CH/100g pár — az alapérték csak kiinduló
-          előtöltés, bármikor szabadon korrigálható (pl. fél adag, vagy a
-          csomagoláson szereplő, a táblázatétól eltérő érték esetén). A tétel
-          végleges CH(g)-ja (súly × CH/100g ÷ 100) ebből számolt, megjelenített
-          érték — nem külön mező. */
+       /* v20.2 (korrekció, feladat 2–3): Mód (g/ml/db) legördülő — a felismert
+          kiinduló módot bármikor felülbírálhatja a felhasználó. "g"/"ml" módban
+          Mennyiség + CH/100g|100ml pár (a tétel végleges CH(g)-ja ebből számolt,
+          megjelenített érték — nem külön mező); "db" módban a Mennyiség mező a
+          darabszám (qty), ami a régi ×1/×2/×3 szorzó szerepét veszi át. */
+       h('select', {
+        value: f.unitKind || 'g',
+        onChange: e => setFoodUnitKind(f.fid, e.target.value),
+        title: window.t('Mód: súly (g), folyadék (ml) vagy darab/adag (db) — ha a felismerés téves, itt módosítható'),
+        className: 'hbc-fooditem-mode border rounded-lg px-1 py-1 text-xs'
+       },
+       h('option', { value: 'g' }, window.t('g')),
+       h('option', { value: 'ml' }, window.t('ml')),
+       h('option', { value: 'count' }, window.t('db'))
+       ),
+       f.unitKind === 'count' ?
        h('input', {
         type: 'number',
         step: '1',
         min: '0',
-        value: f.grams != null ? f.grams : '',
-        onChange: e => setFoodGrams(f.fid, e.target.value),
-        placeholder: window.t('súly (g)'),
-        title: window.t('A ténylegesen elfogyasztott mennyiség súlya, grammban'),
-        className: 'border rounded-lg px-1 py-1 text-xs w-16'
-       }),
-       h('input', {
-        type: 'number',
-        step: '0.1',
-        min: '0',
-        value: f.chPer100 != null ? f.chPer100 : '',
-        onChange: e => setFoodChPer100(f.fid, e.target.value),
-        placeholder: window.t('CH/100g'),
-        title: window.t('Szénhidráttartalom 100 grammra vetítve — a termék csomagolásáról vagy egy tápérték-táblázatból (pl. a beépített CH-táblázatból)'),
-        className: 'border rounded-lg px-1 py-1 text-xs w-16 font-bold text-indigo-700'
-       }),
+        value: f.qty != null ? f.qty : '',
+        onChange: e => setFoodQty(f.fid, e.target.value),
+        placeholder: window.t('db'),
+        title: window.t('Darabszám/adagszám — ez váltja ki a korábbi ×1/×2/×3 szorzót'),
+        className: 'hbc-fooditem-amt border rounded-lg px-1 py-1 text-xs'
+       }) :
+       h(Fragment, null,
+        h('input', {
+         type: 'number',
+         step: '1',
+         min: '0',
+         value: f.grams != null ? f.grams : '',
+         onChange: e => setFoodGrams(f.fid, e.target.value),
+         placeholder: f.unitKind === 'ml' ? window.t('mennyiség (ml)') : window.t('súly (g)'),
+         title: f.unitKind === 'ml' ? window.t('A ténylegesen elfogyasztott mennyiség, milliliterben (100 ml = 1 dl)') : window.t('A ténylegesen elfogyasztott mennyiség súlya, grammban'),
+         className: 'hbc-fooditem-amt border rounded-lg px-1 py-1 text-xs'
+        }),
+        h('input', {
+         type: 'number',
+         step: '0.1',
+         min: '0',
+         value: f.chPer100 != null ? f.chPer100 : '',
+         onChange: e => setFoodChPer100(f.fid, e.target.value),
+         placeholder: f.unitKind === 'ml' ? window.t('CH/100ml') : window.t('CH/100g'),
+         title: f.unitKind === 'ml' ? window.t('Szénhidráttartalom 100 milliliterre vetítve — a termék csomagolásáról') : window.t('Szénhidráttartalom 100 grammra vetítve — a termék csomagolásáról vagy egy tápérték-táblázatból (pl. a beépített CH-táblázatból)'),
+         className: 'hbc-fooditem-rate border rounded-lg px-1 py-1 text-xs font-bold text-indigo-700'
+        })
+       ),
        h('span', {
         className: 'text-xs font-black text-indigo-700 whitespace-nowrap',
-        title: window.t('Számolt szénhidráttartalom: súly × CH/100g ÷ 100')
+        title: window.t('Számolt szénhidráttartalom')
        }, '= ' + fmtCH(foodLineCH(f)) + 'g CH'),
        h('button', {
         type: 'button',
@@ -8230,7 +8322,7 @@ function AddEntry({
         ...p,
         fatProt: e.target.checked
        })),
-       className: 'w-5 h-5 accent-amber-600'
+       className: 'w-5 h-5 hbc-accent-amber'
       }),
       '🥓 ' + window.t('Zsíros, fehérjedús étel')),
      form.fatProt && h('p', {
@@ -8257,7 +8349,7 @@ function AddEntry({
     ),
     /* ═══ v19: AKTIVITÁS/HŐSÉG PROFIL — opcionális, csak a CH-alapú bólusnál ═══ */
     actProfilesOn && actProfiles.length > 0 && h('div', {
-      className: 'mb-2 p-2 bg-white/70 rounded-xl border border-purple-200'
+      className: 'mb-2 p-2 hbc-bg-white-70 rounded-xl border border-purple-200'
      },
      h('label', {
        className: 'text-xs font-bold text-purple-700 block mb-1'
@@ -8265,7 +8357,7 @@ function AddEntry({
      h('select', {
        value: form.activityProfileId || '',
        onChange: e => setForm(p => ({ ...p, activityProfileId: e.target.value })),
-       className: 'w-full border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400 mb-2'
+       className: 'w-full border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none hbc-focus-border-purple-400 mb-2'
       },
       h('option', { value: '' }, window.t('Nincs (alap)')),
       actProfiles.map(pf => h('option', { key: pf.id, value: pf.id }, pf.name))
@@ -8277,7 +8369,7 @@ function AddEntry({
        value: form.weatherTemp,
        placeholder: '°C',
        onChange: e => setForm(p => ({ ...p, weatherTemp: e.target.value, weatherSource: 'manual' })),
-       className: 'w-24 border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400'
+       className: 'hbc-w24 border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none hbc-focus-border-purple-400'
       }),
       h('button', {
        type: 'button',
@@ -8420,7 +8512,7 @@ function AddEntry({
       állítható (korábban csak Egyéb tevékenységnél); csak a Tulajdonos látja,
       a Követőhöz el sem jut */
    h('label', {
-     className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
+     className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 hbc-cursor-pointer'
     },
     h('input', {
      type: 'checkbox',
@@ -8429,7 +8521,7 @@ function AddEntry({
       ...form,
       private: e.target.checked
      }),
-     className: 'w-5 h-5 accent-gray-600'
+     className: 'w-5 h-5 hbc-accent-gray'
     }),
     '🔒 ' + window.t('Privát bejegyzés (a Követő egyáltalán nem látja)')),
 
@@ -8469,7 +8561,7 @@ function ViewEntryModal({
     className: 'text-sm font-bold text-gray-500 shrink-0'
    }, icon + ' ' + window.t(label)),
    h('span', {
-    className: 'text-sm font-black text-gray-800 text-right'
+    className: 'text-sm font-black text-gray-800 hbc-text-right'
    }, String(value))
   );
  const foods = Array.isArray(entry.foods) ? entry.foods : [];
@@ -8530,9 +8622,13 @@ function ViewEntryModal({
       }, '🥗 ' + window.t('Ételek a bejegyzésben')),
       foods.map((f, i) => h('p', {
        key: i,
-       className: 'text-sm text-gray-800 font-semibold pl-2'
-      }, '• ' + f.name + ' — ' + (f.grams != null && f.grams !== '' ? fmtCH(f.grams) + 'g · ' : '') + fmtCH(foodLineCH(f)) + 'g CH' +
-     (f.itemTime ? ' · ⏱️ ' + f.itemTime : ''))) /* v18.4: tétel saját időpontja; v20 (feladat 2): súly + CH/100g alapján számolt CH */
+       className: 'text-sm text-gray-800 font-semibold hbc-pl-2'
+      }, '• ' + f.name + ' — ' +
+     (f.unitKind === 'count' ? (f.qty != null && f.qty !== '' ? fmtCH(f.qty) + ' db · ' : '') :
+      f.unitKind === 'ml' ? (f.grams != null && f.grams !== '' ? fmtCH(f.grams) + 'ml · ' : '') :
+      (f.grams != null && f.grams !== '' ? fmtCH(f.grams) + 'g · ' : '')) +
+     fmtCH(foodLineCH(f)) + 'g CH' +
+     (f.itemTime ? ' · ⏱️ ' + f.itemTime : ''))) /* v18.4: tétel saját időpontja; v20.2 (korrekció): mód (g/ml/db) szerinti mennyiség + CH/100g|100ml|db alapján számolt CH */
      ),
      entry.carbs > 0 && row('🍽️', 'TELJES CH', fmtCH(entry.carbs) + ' g'),
     entry.fatProt && row('🥓', window.t('Zsíros, fehérjedús étel'), window.t('elnyújtott felszívódás — 2–3 óra múlva ellenőrző mérés javasolt')), /* v18 (6.3) */
@@ -8554,7 +8650,7 @@ function ViewEntryModal({
        className: 'text-sm font-bold text-gray-500 mb-1'
       }, '📝 ' + window.t('Jegyzetek')),
       h('p', {
-       className: 'text-sm text-gray-800 italic whitespace-pre-wrap'
+       className: 'text-sm text-gray-800 italic hbc-whitespace-pre-wrap'
       }, entry.notes)
      ),
      h('button', {
@@ -8585,25 +8681,40 @@ function EditModal({
     A tárolt carbs = ételek CH-ja + extra CH; megnyitáskor szétbontjuk, mentéskor
     újra összeadjuk, így a CH mindig pontos marad. */
  const [form, setForm] = useState(() => {
-  /* v20 (feladat 2): korábbi tételek (akár a régi szorzós, akár a köztes
-     grams+carbsFinal modellel mentve) migrálása a Súly (g) + CH/100g modellre —
-     ha a tételen már van explicit chPer100, az marad; egyébként a meglévő
-     súly+végleges CH párból (ha mindkettő ismert) visszaszámoljuk a CH/100g-ot,
-     kiinduló, szabadon korrigálható értékként. A carbsFinal megmarad
-     tartalék/visszafelé-kompatibilitási célra, ha a súly nem lenne ismert. */
+  /* v20.2 (korrekció): korábbi tételek migrálása a Mód (g·ml·db) + Mennyiség +
+     Ráta modellre — ha a tételen már van explicit unitKind, az marad; egyébként
+     az "unit" szövegéből ismerjük fel. "count" (db/adag) módban a darabszám a
+     régi mult-ból (vagy explicit qty-ból) jön, alapértelmezetten 1 — a v20.1
+     verzióban tévesen mentett (grams/chPer100 nélküli) darab-alapú tételeknél a
+     mennyiség sajnos nem rekonstruálható, ott 1-re áll vissza, utólag
+     korrigálandó. "g"/"ml" módban a meglévő súly+végleges CH párból (ha mindkettő
+     ismert) visszaszámoljuk a rátát, kiinduló, szabadon korrigálható értékként. */
   const fds = (Array.isArray(entry.foods) ? entry.foods : []).map((f, i) => {
    const mult = parseFloat(f.mult) || 1;
-   const baseG = parseGramsFromUnit(f.unit);
-   const grams = f.grams != null ? f.grams : (baseG != null ? baseG * mult : null);
+   const kind = f.unitKind || detectUnitKind(f.unit);
+   if (kind === 'count') {
+    return {
+     ...f,
+     fid: f.fid || i + 1,
+     unitKind: 'count',
+     qty: f.qty != null ? f.qty : (f.mult != null ? mult : 1),
+     grams: null,
+     chPer100: null
+    };
+   }
+   const baseAmt = kind === 'ml' ? parseMlFromUnit(f.unit) : parseGramsFromUnit(f.unit);
+   const grams = f.grams != null ? f.grams : (baseAmt != null ? baseAmt * mult : null);
    const carbsFinal = f.carbsFinal != null ? f.carbsFinal : (parseFloat(f.carbs) || 0) * mult;
    const chPer100 = f.chPer100 != null ? f.chPer100 :
     (grams != null && grams > 0 && carbsFinal != null) ? Math.round((carbsFinal / grams * 100) * 10) / 10 : null;
    return {
     ...f,
     fid: f.fid || i + 1,
+    unitKind: kind,
     grams,
     chPer100,
-    carbsFinal
+    carbsFinal,
+    qty: null
    };
   });
   const fCH = fds.reduce((s, f) => s + foodLineCH(f), 0);
@@ -8649,14 +8760,17 @@ function EditModal({
  /* v18.7 (feladat 6–7): Étkezésnél az ételek időpontjának változásakor a fő
     Időpont a legkorábbi ételtétel-időponthoz igazodik (lásd mealTimestampFromFoods) */
  const addFoodToForm = (f, mult = 1) => setForm(p => {
-  /* v20 (feladat 2): l. AddEntry azonos nevű függvényének megjegyzését —
-     Idő / Súly (g) / CH(100g) / Törlés mezők kerülnek a sorra. */
-  const baseG = parseGramsFromUnit(f.unit);
+  /* v20.2 (korrekció): l. AddEntry azonos nevű függvényének megjegyzését — Idő /
+     Mód (g·ml·db) / Mennyiség / Ráta / Törlés mezők kerülnek a sorra. */
+  const kind = detectUnitKind(f.unit);
+  const baseAmt = kind === 'ml' ? parseMlFromUnit(f.unit) : kind === 'g' ? parseGramsFromUnit(f.unit) : null;
   const foods = [...(p.foods || []), {
    ...f,
    fid: Date.now(),
-   grams: baseG != null ? baseG * mult : null,
-   chPer100: chPer100FromFood(f)
+   unitKind: kind,
+   grams: (kind !== 'count' && baseAmt != null) ? baseAmt * mult : null,
+   chPer100: kind !== 'count' ? chPer100FromFood(f, kind) : null,
+   qty: kind === 'count' ? mult : null
   }];
   const newTs = p.type === 'Étkezés' ? mealTimestampFromFoods(foods, p.timestamp) : p.timestamp;
   return {
@@ -8693,6 +8807,29 @@ function EditModal({
   foods: (p.foods || []).map(x => x.fid === fid ? {
    ...x,
    chPer100: val === '' ? null : parseFloat(val)
+  } : x)
+ }));
+ /* v20.2 (új, Zoltán kérésére): l. AddEntry azonos nevű függvényének megjegyzését —
+    a mód (g/ml/db) utólag is átváltható. */
+ const setFoodUnitKind = (fid, kind) => setForm(p => ({
+  ...p,
+  foods: (p.foods || []).map(x => {
+   if (x.fid !== fid) return x;
+   const baseAmt = kind === 'ml' ? parseMlFromUnit(x.unit) : kind === 'g' ? parseGramsFromUnit(x.unit) : null;
+   return {
+    ...x,
+    unitKind: kind,
+    grams: kind !== 'count' ? baseAmt : null,
+    chPer100: kind !== 'count' ? chPer100FromFood(x, kind) : null,
+    qty: kind === 'count' ? 1 : null
+   };
+  })
+ }));
+ const setFoodQty = (fid, val) => setForm(p => ({
+  ...p,
+  foods: (p.foods || []).map(x => x.fid === fid ? {
+   ...x,
+   qty: val === '' ? null : parseFloat(val)
   } : x)
  }));
  /* v18.4: tételenkénti CH-időpont utólagos szerkesztésnél is */
@@ -8949,7 +9086,7 @@ function EditModal({
        /* v18.7 FIX (feladat 3): a beépített magyar CH-táblázat (205 tétel) itt is
           böngészhető — ugyanaz a logika, mint az Új bejegyzés űrlapján */
        chTableOn && h('div', {
-         className: 'mt-3 pt-3 border-t-2 border-emerald-200'
+         className: 'mt-3 hbc-pt-3 hbc-border-t-2 border-emerald-200'
         },
         h('p', {
           className: 'text-xs font-black text-emerald-700 mb-2'
@@ -8962,7 +9099,7 @@ function EditModal({
           type: 'button',
           key: c,
           onClick: () => setChCat(chCat === c ? '' : c),
-          className: `px-2 py-1 rounded-lg text-[11px] font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`
+          className: `px-2 py-1 rounded-lg text-[11px] font-bold ${chCat===c?'bg-emerald-600 text-white':'bg-emerald-100 text-emerald-700 hbc-hover-bg-emerald-200'}`
          }, window.t(c)))),
         chHits.length === 0 && _chq.length < 2 ?
         h('p', {
@@ -8996,7 +9133,7 @@ function EditModal({
              unit: f.unit,
              isDefault: false
             }, n),
-            className: 'bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold hover:bg-emerald-200'
+            className: 'bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg text-xs font-bold hbc-hover-bg-emerald-200'
            }, `${n}×`))
           )
          )),
@@ -9033,32 +9170,55 @@ function EditModal({
           title: window.t('Ennek a tételnek az elfogyasztási ideje (alapból a bejegyzés időpontja)'),
           className: 'border rounded-lg px-1 py-1 text-xs' + (f.itemTime ? ' border-emerald-400 bg-emerald-50 font-bold' : '')
          }),
-         /* v20 (feladat 2): Súly (g) + CH/100g pár, utólagos szerkesztésnél is —
-            bármikor szabadon korrigálható. A tétel végleges CH(g)-ja (súly ×
-            CH/100g ÷ 100) ebből számolt, megjelenített érték — nem külön mező. */
+         /* v20.2 (korrekció, feladat 2–3): Mód (g/ml/db) legördülő, utólagos
+            szerkesztésnél is — lásd az AddEntry azonos blokkjánál lévő
+            magyarázatot. */
+         h('select', {
+          value: f.unitKind || 'g',
+          onChange: e => setFoodUnitKind(f.fid, e.target.value),
+          title: window.t('Mód: súly (g), folyadék (ml) vagy darab/adag (db) — ha a felismerés téves, itt módosítható'),
+          className: 'hbc-fooditem-mode border rounded-lg px-1 py-1 text-xs'
+         },
+         h('option', { value: 'g' }, window.t('g')),
+         h('option', { value: 'ml' }, window.t('ml')),
+         h('option', { value: 'count' }, window.t('db'))
+         ),
+         f.unitKind === 'count' ?
          h('input', {
           type: 'number',
           step: '1',
           min: '0',
-          value: f.grams != null ? f.grams : '',
-          onChange: e => setFoodGrams(f.fid, e.target.value),
-          placeholder: window.t('súly (g)'),
-          title: window.t('A ténylegesen elfogyasztott mennyiség súlya, grammban'),
-          className: 'border rounded-lg px-1 py-1 text-xs w-16'
-         }),
-         h('input', {
-          type: 'number',
-          step: '0.1',
-          min: '0',
-          value: f.chPer100 != null ? f.chPer100 : '',
-          onChange: e => setFoodChPer100(f.fid, e.target.value),
-          placeholder: window.t('CH/100g'),
-          title: window.t('Szénhidráttartalom 100 grammra vetítve — a termék csomagolásáról vagy egy tápérték-táblázatból (pl. a beépített CH-táblázatból)'),
-          className: 'border rounded-lg px-1 py-1 text-xs w-16 font-bold text-indigo-700'
-         }),
+          value: f.qty != null ? f.qty : '',
+          onChange: e => setFoodQty(f.fid, e.target.value),
+          placeholder: window.t('db'),
+          title: window.t('Darabszám/adagszám — ez váltja ki a korábbi ×1/×2/×3 szorzót'),
+          className: 'hbc-fooditem-amt border rounded-lg px-1 py-1 text-xs'
+         }) :
+         h(Fragment, null,
+          h('input', {
+           type: 'number',
+           step: '1',
+           min: '0',
+           value: f.grams != null ? f.grams : '',
+           onChange: e => setFoodGrams(f.fid, e.target.value),
+           placeholder: f.unitKind === 'ml' ? window.t('mennyiség (ml)') : window.t('súly (g)'),
+           title: f.unitKind === 'ml' ? window.t('A ténylegesen elfogyasztott mennyiség, milliliterben (100 ml = 1 dl)') : window.t('A ténylegesen elfogyasztott mennyiség súlya, grammban'),
+           className: 'hbc-fooditem-amt border rounded-lg px-1 py-1 text-xs'
+          }),
+          h('input', {
+           type: 'number',
+           step: '0.1',
+           min: '0',
+           value: f.chPer100 != null ? f.chPer100 : '',
+           onChange: e => setFoodChPer100(f.fid, e.target.value),
+           placeholder: f.unitKind === 'ml' ? window.t('CH/100ml') : window.t('CH/100g'),
+           title: f.unitKind === 'ml' ? window.t('Szénhidráttartalom 100 milliliterre vetítve — a termék csomagolásáról') : window.t('Szénhidráttartalom 100 grammra vetítve — a termék csomagolásáról vagy egy tápérték-táblázatból (pl. a beépített CH-táblázatból)'),
+           className: 'hbc-fooditem-rate border rounded-lg px-1 py-1 text-xs font-bold text-indigo-700'
+          })
+         ),
          h('span', {
           className: 'text-xs font-black text-indigo-700 whitespace-nowrap',
-          title: window.t('Számolt szénhidráttartalom: súly × CH/100g ÷ 100')
+          title: window.t('Számolt szénhidráttartalom')
          }, '= ' + fmtCH(foodLineCH(f)) + 'g CH'),
          h('button', {
           type: 'button',
@@ -9097,7 +9257,7 @@ function EditModal({
         ...p,
         fatProt: e.target.checked
        })),
-       className: 'w-5 h-5 accent-amber-600'
+       className: 'w-5 h-5 hbc-accent-amber'
       }),
       '🥓 ' + window.t('Zsíros, fehérjedús étel'))),
     /* v20 (feladat 5): aktivitás/hőség profil + hőmérséklet — utólag is
@@ -9111,7 +9271,7 @@ function EditModal({
      h('select', {
        value: form.activityProfileId || '',
        onChange: e => setForm(p => ({ ...p, activityProfileId: e.target.value })),
-       className: 'w-full border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400 mb-2'
+       className: 'w-full border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none hbc-focus-border-purple-400 mb-2'
       },
       h('option', { value: '' }, window.t('Nincs (alap)')),
       actProfiles.map(pf => h('option', { key: pf.id, value: pf.id }, pf.name))
@@ -9123,7 +9283,7 @@ function EditModal({
        value: form.weatherTemp != null ? form.weatherTemp : '',
        placeholder: '°C',
        onChange: e => setForm(p => ({ ...p, weatherTemp: e.target.value, weatherSource: 'manual' })),
-       className: 'w-24 border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-purple-400'
+       className: 'hbc-w24 border-2 border-purple-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none hbc-focus-border-purple-400'
       }),
       h('button', {
        type: 'button',
@@ -9246,7 +9406,7 @@ function EditModal({
        állítható (korábban csak Egyéb tevékenységnél); csak a Tulajdonos
        látja, a Követőhöz el sem jut */
     h('label', {
-      className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
+      className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 hbc-cursor-pointer'
      },
      h('input', {
       type: 'checkbox',
@@ -9255,7 +9415,7 @@ function EditModal({
        ...form,
        private: e.target.checked
       }),
-      className: 'w-5 h-5 accent-gray-600'
+      className: 'w-5 h-5 hbc-accent-gray'
      }),
      '🔒 ' + window.t('Privát bejegyzés (a Követő egyáltalán nem látja)')),
     h('div', {
@@ -9482,7 +9642,7 @@ function SyncManager({
        rerender();
       },
       placeholder: 'pl. nev@gmail.com',
-      className: 'w-full border-2 border-emerald-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-emerald-400'
+      className: 'w-full border-2 border-emerald-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none hbc-focus-border-emerald-400'
      }),
      h('p', {
        className: 'text-[11px] text-emerald-700 mt-1'
@@ -10631,7 +10791,7 @@ function Settings({
        className: 'hbc-avatar-preview rounded-full bg-indigo-100 border-2 border-indigo-200 flex items-center justify-center text-2xl'
       }, '🙂'),
       h('label', {
-        className: 'px-3 py-2 rounded-xl text-sm font-bold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer'
+        className: 'px-3 py-2 rounded-xl text-sm font-bold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 hbc-cursor-pointer'
        },
        avatarBusy ? t('Feldolgozás…') : '📷 ' + t('Fénykép választása'),
        h('input', {
@@ -10643,7 +10803,7 @@ function Settings({
       s.avatarPhoto && h('button', {
        type: 'button',
        onClick: () => setS({ ...s, avatarPhoto: null }),
-       className: 'text-xs font-bold text-red-500 hover:text-red-700'
+       className: 'text-xs font-bold text-red-500 hbc-hover-text-red-700'
       }, '🗑️ ' + t('Törlés'))
      ),
      h('p', {
@@ -10738,7 +10898,7 @@ function Settings({
         ...s,
         customBg: null
        }),
-       className: 'text-xs font-bold text-indigo-500 underline'
+       className: 'text-xs font-bold text-indigo-500 hbc-underline'
       }, '↩️ Visszaállítás (alap háttér)')
      ),
      h('p', {
@@ -10793,7 +10953,7 @@ function Settings({
       ...s,
       motivMsgs: MOTIV_MSG_DEFAULTS.slice()
      }),
-     className: 'text-xs font-bold text-indigo-500 underline whitespace-nowrap ml-2'
+     className: 'text-xs font-bold text-indigo-500 hbc-underline whitespace-nowrap ml-2'
     }, '↩️ ' + t('Alapüzenetek visszaállítása'))),
    h('div', {
      className: 'mb-4'
@@ -10877,7 +11037,7 @@ function Settings({
      streakSuffix: STREAK_DEFAULTS.suffix,
      streakMsg: STREAK_DEFAULTS.msg
     }),
-    className: 'text-xs font-bold text-indigo-500 underline mt-2'
+    className: 'text-xs font-bold text-indigo-500 hbc-underline mt-2'
    }, '↩️ ' + t('Alapfeliratok visszaállítása'))
   ]),
   /* ═══ v18/v19: ÚJ SZOLGÁLTATÁSOK KAPCSOLÓI — alapból mind BEkapcsolva ═══ */
@@ -10979,7 +11139,7 @@ function Settings({
          ...s,
          [o.k]: e.target.checked
         }),
-        className: 'w-5 h-5 accent-emerald-600 shrink-0'
+        className: 'w-5 h-5 hbc-accent-emerald shrink-0'
        }),
        h('span', {
         className: 'truncate'
@@ -10999,11 +11159,11 @@ function Settings({
        title: t('Ugrás a szolgáltatás felületéhez')
       }, '↗️ ' + t('Megnyitás'))),
      h('p', {
-      className: 'text-xs text-gray-500 mt-1 ml-7'
+      className: 'text-xs text-gray-500 mt-1 hbc-ml-7'
      }, o.desc),
      /* az étkezés utáni emlékeztető ideje percben állítható */
      o.k === 'featMealRemind' && s.featMealRemind !== false && h('div', {
-       className: 'ml-7 mt-2 flex items-center gap-2'
+       className: 'hbc-ml-7 mt-2 flex items-center gap-2'
       },
       h('label', {
        className: 'text-xs font-bold text-gray-600'
@@ -11043,7 +11203,7 @@ function Settings({
      }),
      '🔠 ' + t('Nagy betűs mód')),
     h('p', {
-     className: 'text-xs text-gray-500 mt-1 ml-7'
+     className: 'text-xs text-gray-500 mt-1 hbc-ml-7'
     }, t('Nagyobb betűméret az egész alkalmazásban — idősebb vagy gyengébben látó felhasználóknak. (Ez megjelenítési opció, ezért alapból kikapcsolt.)')))
   ]),
   /* ═══ v12: SOS VÉSZHELYZETI ADATOK ═══ */
@@ -11108,7 +11268,7 @@ function Settings({
    }, '📞 ' + t('Értesítendő hozzátartozók')),
    (s.sosContacts || []).map((c, i) => h('div', {
      key: i,
-     className: 'grid grid-cols-[1fr_1fr_1fr_auto] gap-2 mb-2 items-center'
+     className: 'grid hbc-grid-cols-3-auto gap-2 mb-2 items-center'
     },
     h('input', {
      type: 'text',
@@ -11289,7 +11449,7 @@ function Settings({
       className: 'text-sm font-bold text-purple-700 block mb-1'
      }, window.t('Emlékeztető az Áttekintésen')),
      h('label', {
-       className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer'
+       className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 hbc-cursor-pointer'
       },
       h('input', {
        type: 'checkbox',
@@ -11339,7 +11499,7 @@ function Settings({
     )
    ),
    h('p', {
-    className: 'text-xs text-gray-400 mb-4 -mt-2'
+    className: 'text-xs text-gray-400 mb-4 hbc-mt-neg2'
    }, window.t('Ebben az időszakban rögzített vércukormérésekből ismeri fel az app a hajnali jelenség/Somogyi-hatás gyanús eseteit (l. Statisztika oldal + Orvosi riport) — kizárólag tájékoztató jelleggel, nem ad automatikus dózisjavaslatot.')),
    h('div', null,
     h('label', {
@@ -11438,7 +11598,7 @@ function Settings({
     className: 'text-sm font-bold text-emerald-700 mb-2'
    }, '🍽️ Étkezés-alapértelmezés határai'),
    h('div', {
-     className: 'grid grid-cols-2 md:grid-cols-5 gap-3'
+     className: 'grid grid-cols-2 hbc-md-grid-cols-5 gap-3'
     },
     hourField('Reggeli eddig', 'mb1', 9),
     hourField('Tízórai eddig', 'mb2', 11),
@@ -11471,7 +11631,7 @@ function Settings({
     className: 'text-xs text-gray-500 mb-3'
    }, t('Az Egyéb tevékenység bejegyzéseknél választható 1–5 skála szintjeinek elnevezése. Írd át őket a saját szavaidra!')),
    h('div', {
-     className: 'grid grid-cols-1 md:grid-cols-5 gap-3'
+     className: 'grid grid-cols-1 hbc-md-grid-cols-5 gap-3'
     },
     [0, 1, 2, 3, 4].map(i => h('div', {
       key: i
@@ -11502,7 +11662,7 @@ function Settings({
      ...s,
      actLevels: ACT_LEVEL_DEFAULTS.slice()
     }),
-    className: 'mt-3 text-xs font-bold text-indigo-500 underline'
+    className: 'mt-3 text-xs font-bold text-indigo-500 hbc-underline'
    }, '↩️ ' + t('Alapértelmezett elnevezések visszaállítása'))
   ]),
   /* ═══ v19: AKTIVITÁS/HŐSÉG PROFILOK — szabadon szerkeszthető preset-lista ═══
@@ -11535,7 +11695,7 @@ function Settings({
        step: 5,
        value: pf[key] != null ? pf[key] : 0,
        onChange: e => updatePf({ [key]: parseInt(e.target.value) || 0 }),
-       className: 'w-full border-2 border-teal-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none focus:border-teal-400'
+       className: 'w-full border-2 border-teal-200 rounded-xl px-2 py-1.5 text-sm focus:outline-none hbc-focus-border-teal-400'
       }));
      return h('div', {
        key: pf.id || i,
@@ -11547,13 +11707,13 @@ function Settings({
         value: pf.name || '',
         placeholder: t('Profil neve'),
         onChange: e => updatePf({ name: e.target.value }),
-        className: 'flex-1 border-2 border-teal-200 rounded-xl px-2 py-1.5 text-sm font-bold focus:outline-none focus:border-teal-400'
+        className: 'flex-1 border-2 border-teal-200 rounded-xl px-2 py-1.5 text-sm font-bold focus:outline-none hbc-focus-border-teal-400'
        }),
        h('button', {
         type: 'button',
         title: t('Törlés'),
         onClick: () => setS({ ...s, activityProfiles: list.filter((_, j) => j !== i) }),
-        className: 'text-red-500 hover:text-red-700 px-2 py-1.5 rounded-xl border-2 border-red-200 text-sm font-bold shrink-0'
+        className: 'text-red-500 hbc-hover-text-red-700 px-2 py-1.5 rounded-xl border-2 border-red-200 text-sm font-bold shrink-0'
        }, '🗑️')
       ),
       h('div', { className: 'grid grid-cols-3 gap-2 mb-2' },
@@ -11566,7 +11726,7 @@ function Settings({
        value: pf.extraCH || '',
        placeholder: t('Javasolt extra CH (pl. „Szőlőcukor 2 db / 10g CH”)'),
        onChange: e => updatePf({ extraCH: e.target.value }),
-       className: 'w-full border-2 border-teal-200 rounded-xl px-2 py-1.5 text-xs focus:outline-none focus:border-teal-400'
+       className: 'w-full border-2 border-teal-200 rounded-xl px-2 py-1.5 text-xs focus:outline-none hbc-focus-border-teal-400'
       })
      );
     })
@@ -11588,12 +11748,12 @@ function Settings({
        }]
       });
      },
-     className: 'text-xs font-bold text-teal-600 underline'
+     className: 'text-xs font-bold text-teal-600 hbc-underline'
     }, '➕ ' + t('Új profil hozzáadása')),
     h('button', {
      type: 'button',
      onClick: () => setS({ ...s, activityProfiles: ACTIVITY_PROFILE_DEFAULTS.slice() }),
-     className: 'text-xs font-bold text-indigo-500 underline'
+     className: 'text-xs font-bold text-indigo-500 hbc-underline'
     }, '↩️ ' + t('Alapértelmezett profilok visszaállítása'))
    )
   ], '', 'hbc-act-profiles-card'),
@@ -11624,13 +11784,13 @@ function Settings({
     ].map(m =>
      h('div', {
        key: m.f,
-       className: 'flex items-stretch gap-2'
+       className: 'flex hbc-items-stretch gap-2'
       },
       h('a', {
        href: m.f,
        target: '_blank',
        rel: 'noopener',
-       className: 'ti flex-1 inline-flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm min-h-[44px]',
+       className: 'ti flex-1 hbc-inline-flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm hbc-min-h-44',
        style: {
         textDecoration: 'none'
        }
@@ -11639,7 +11799,7 @@ function Settings({
        href: m.f,
        download: m.f,
        'aria-label': window.t('Letöltés') + ': ' + m.lb,
-       className: 'ti inline-flex items-center justify-center px-4 rounded-xl font-black text-lg min-h-[44px]',
+       className: 'ti hbc-inline-flex items-center justify-center px-4 rounded-xl font-black text-lg hbc-min-h-44',
        style: {
         textDecoration: 'none'
        },
@@ -12248,13 +12408,13 @@ function App() {
      className: 'max-w-5xl mx-auto px-3 py-2 flex items-center justify-between gap-2'
     },
     h('div', {
-      className: 'flex items-center gap-2 md:gap-3 min-w-0'
+      className: 'flex items-center gap-2 hbc-md-gap-3 min-w-0'
      },
      /* v18.5: a logóra koppintva azonnali sötét/világos váltás — jóváhagyás nélkül */
      h('img', {
       src: 'icons/TypeOneDiab_logo.png',
       alt: 'TypeOneDiab logo',
-      className: 'hbc-logo cursor-pointer',
+      className: 'hbc-logo hbc-cursor-pointer',
       title: window.t('Sötét/világos nézet váltása'),
       role: 'button',
       tabIndex: 0,
@@ -12299,7 +12459,7 @@ function App() {
       type: 'button',
       'aria-label': 'SOS',
       title: '🆘 SOS — ' + window.t('Vészhelyzet'),
-      className: 'hidden md:block font-black text-white px-3 py-2 rounded-xl text-sm shadow',
+      className: 'hbc-desktop-only font-black text-white px-3 py-2 rounded-xl text-sm shadow',
       style: {
        background: '#dc2626'
       }
@@ -12307,7 +12467,7 @@ function App() {
      !followerMode && h('button', {
       onClick: () => setView('add'),
       type: 'button',
-      className: 'hidden md:block font-bold text-white px-4 py-2 rounded-xl text-sm shadow-lg',
+      className: 'hbc-desktop-only font-bold text-white px-4 py-2 rounded-xl text-sm shadow-lg',
       style: {
        background: 'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'
       }
@@ -12317,7 +12477,7 @@ function App() {
        onClick: () => setMenuOpen(o => !o),
        type: 'button',
        'aria-label': window.t('Menü'),
-       className: 'md:hidden p-2 rounded-xl ' + (menuOpen ? 'ta' : 'ti')
+       className: 'hbc-mobile-only p-2 rounded-xl ' + (menuOpen ? 'ta' : 'ti')
       },
       h(Icon, {
        name: menuOpen ? 'x' : 'menu',
@@ -12328,7 +12488,7 @@ function App() {
   ),
   // ═══ Asztali nézet: minden oldalválasztó gomb a felső sávban — v10.1: a mért fejlécmagassághoz tapad ═══
   h('div', {
-    className: 'hidden md:block bg-white/75 backdrop-blur-md border-b border-indigo-100 sticky z-40',
+    className: 'hbc-desktop-only bg-white/75 backdrop-blur-md border-b border-indigo-100 sticky z-40',
     style: {
      top: headerH + 'px'
     }
@@ -12340,7 +12500,7 @@ function App() {
       key: tb.id,
       onClick: () => go(tb.id),
       type: 'button',
-      className: `flex-1 min-w-0 flex items-center justify-center gap-2 px-2 py-2.5 rounded-xl font-bold text-sm text-center leading-snug transition-all ${view===tb.id?'ta':'ti hover:bg-indigo-100'}`
+      className: `flex-1 min-w-0 flex items-center justify-center gap-2 px-2 py-2.5 rounded-xl font-bold text-sm text-center hbc-leading-snug transition-all ${view===tb.id?'ta':'ti hover:bg-indigo-100'}`
      },
      h(Icon, {
       name: tb.ic,
@@ -12351,7 +12511,7 @@ function App() {
   ),
   // ═══ v10: mobil hamburger menü — a fejléc ALATT nyílik, nem takarja a fejlécet ═══
   menuOpen && h('div', {
-    className: 'md:hidden fixed inset-x-0 bottom-0 z-[95] bg-black/40',
+    className: 'hbc-mobile-only hbc-fixed-overlay hbc-overlay-dim',
     style: {
      top: 'calc(' + headerH + 'px + env(safe-area-inset-top,0px))'
     },
@@ -12367,7 +12527,7 @@ function App() {
      }
     },
     h('p', {
-     className: 'text-xs font-black text-gray-400 uppercase tracking-wide mb-2'
+     className: 'text-xs font-black text-gray-400 hbc-uppercase hbc-tracking-wide mb-2'
     }, 'Oldalak'),
     h('div', {
       className: 'grid grid-cols-2 gap-2'
@@ -12424,7 +12584,7 @@ function App() {
   ),
   // Tartalom (mobilon alul hely az alsó navigációs sávnak)
   h('div', {
-    className: 'max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-6 pb-28 md:pb-6'
+    className: 'max-w-5xl mx-auto px-2 md:px-4 py-4 md:py-6 hbc-content-pb'
    },
    view === 'dashboard' && h(Dashboard, {
     entries: effEntries,
@@ -12502,10 +12662,10 @@ function App() {
   ),
   // ═══ v8/v9: alsó navigációs sáv — csak mobilon, a leggyakoribb oldalak ═══
   h('div', {
-    className: 'md:hidden bnav fixed bottom-0 left-0 right-0 z-50'
+    className: 'hbc-mobile-only bnav hbc-fixed-bnav z-50'
    },
    h('div', {
-     className: 'flex items-stretch justify-around px-1 py-1.5'
+     className: 'flex hbc-items-stretch hbc-justify-around px-1 py-1.5'
     },
     [{
       id: 'dashboard',
@@ -12537,7 +12697,7 @@ function App() {
        key: tb.id,
        onClick: () => go(tb.id),
        type: 'button',
-       className: 'flex flex-col items-center gap-0.5 px-2 py-1 flex-1 ' + (view === tb.id ? 'bnav-a' : 'bnav-i')
+       className: 'flex hbc-flex-col items-center hbc-gap-0-5 px-2 py-1 flex-1 ' + (view === tb.id ? 'bnav-a' : 'bnav-i')
       },
       h(Icon, {
        name: tb.ic,
@@ -12545,7 +12705,7 @@ function App() {
        sw: tb.id === 'add' ? 2.5 : 2
       }),
       h('span', {
-       className: 'text-[10px] font-bold leading-none'
+       className: 'text-[10px] font-bold hbc-leading-none'
       }, window.t(tb.f))
      ))
    )
@@ -12577,7 +12737,7 @@ function App() {
    modal
   }),
   toast && h('div', {
-   className: 'fixed bottom-20 md:bottom-5 left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-2xl shadow-2xl text-white text-sm font-bold',
+   className: 'fixed hbc-toast-bottom left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-2xl shadow-2xl text-white text-sm font-bold',
    style: {
     background: 'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'
    }

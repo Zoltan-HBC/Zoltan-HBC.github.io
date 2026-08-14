@@ -8,6 +8,41 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v20.2 korrekció (2026. augusztus 14.)
+
+- **📱💻 Responsive-ellenőrzés (mobil + asztali nézet):** átfogó ellenőrzés
+  után kiderült, hogy az app.css (előre lefordított, purge-olt Tailwind-
+  készlet) egy korábbi lépés óta több, ténylegesen használt segédosztályt
+  nem tartalmazott. Ez érintette: (1) az "Ételek a bejegyzésben" mezőinek
+  szélességét (mobilon kilóghattak a kártyából); (2) az asztali felső
+  navigációs sávot (SOS/➕Új gomb, lapfül-sáv) — 768px fölött SOHA nem jelent
+  meg —, és a mobil hamburger-gombot/alsó navigációt, amik asztali nézetben
+  IS megjelentek; (3) az alsó mobil navigáció és a mobil menü képernyőhöz
+  rögzítését; (4) mobilon a tartalom alsó térközét (a rögzített alsó
+  navigáció alá lóghatott a szöveg). Mindegyik saját, nem purge-olt CSS
+  osztállyal javítva (css/custom.css) — az app.css-t nem kellett újrafordítani.
+  Zoltán kérésére ezután egy TELJES, programmatikus átvizsgálás történt az
+  egész app.js forrásra (a ténylegesen használt ~330 CSS-osztály mindegyike
+  ellenőrizve az app.css-hez képest): további 43, kisebb hatású, de valós
+  hiányzó osztály került elő (kurzor, hover/focus visszajelzés, betűforma,
+  térközök, pl. uppercase, underline, space-y-1.5, flex-col, cursor-pointer,
+  accent-szín jelölőnégyzeteknél, focus:border-* mezőkeret-szín stb.) — ezek
+  is mind saját osztályra cserélve; az egész alkalmazásban 0 hiányzó,
+  ténylegesen használt CSS-osztály maradt.
+- **🍽️ Ételek a bejegyzésben — g / ml / db felismerés:** a rendszer mostantól
+  felismeri, hogy egy étel súly (g), folyadék (ml, pl. "1 dl" = 100 ml) vagy
+  darab/adag (db, pl. "1 db", "1 adag", "1 evőkanál" — ahol nincs
+  értelmezhető "100 g/ml-enkénti" arány) alapú-e, az adatbázis-tétel
+  mértékegysége alapján. A felismert Mód (g/ml/db) egy legördülő menüvel
+  bármikor kézzel felülbírálható. "g"/"ml" módban Mennyiség + CH/100g (vagy
+  CH/100ml) pár adható meg; "db" módban egy Mennyiség (darabszám) mező.
+- **✖️ Étel hozzáadása — ×1/×2/×3 szorzó javítva:** a gyorsválasztó
+  szorzógombok korábban nem működtek darab/adag-alapú (pl. "1 db", "1 adag",
+  "1 evőkanál" — súly/térfogat nélküli) ételeknél, mert az akkori modell csak
+  a súlyalapú tételeket kezelte. Az új g/ml/db modellben a "db" módú
+  tételeknél a szorzó a darabszámot (Mennyiség mezőt) állítja — ugyanúgy,
+  mint a v19 és korábbi verziókban.
+
 ## v20.1 korrekció (2026. augusztus 14.)
 
 - **📍 Hőmérséklet automatikus lekérdezése:** az Aktivitás/hőség blokk

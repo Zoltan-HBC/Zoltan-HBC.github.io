@@ -50,15 +50,16 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
 /* ═══ v15: indítóképernyő vezérlése ═══
-   - A verziószám MINDIG az app.js központi APP_VERSION konstansából jön,
-     így soha nem ragadhat be régi szám (a rendszer-splash-sel ellentétben).
-   - sessionStorage: ugyanabban a (háttérben futó) munkamenetben nem jön fel újra. */
+   - sessionStorage: ugyanabban a (háttérben futó) munkamenetben nem jön fel újra.
+   v20.3 (Zoltán kérése): a jelvényben a verziószám helyett — a fő fejléccel
+   konzisztensen — csak "Type 1 Diabetes APP 2026" látszik; a verziószám
+   mostantól kizárólag a Beállítások/Névjegy csempén jelenik meg. */
 (function(){
   var sp=document.getElementById('hbc-splash');
   if(!sp) return;
   try{
     var v=document.getElementById('hbc-splash-ver');
-    if(v && typeof APP_VERSION!=='undefined') v.textContent='v'+APP_VERSION;
+    if(v) v.textContent='Type 1 Diabetes APP 2026';
   }catch(e){}
   var seen=false;
   try{

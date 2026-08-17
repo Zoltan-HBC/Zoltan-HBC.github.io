@@ -32,6 +32,14 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
   a lehetőség eddig csak az "Új bejegyzés" űrlapon volt elérhető; mostantól
   az utólagos szerkesztésnél (Bejegyzés szerkesztése) is elmenthető egy új
   étel az adatbázisba (js/app.js).
+- **🏷️ Névhasználat frissítése (Zoltán kérése):** a fő fejlécben és az
+  indítóképernyőn (splash) a verziószám helyett mostantól az évszám látszik
+  ("Type 1 Diabetes APP ⚡ 2026") — a becenév-utótag változatlan. A
+  verziószám egy új "Névjegy" csempén jelenik meg a Beállítások alján, a
+  Használati útmutató fölött ("HBC Diabétesz Napló 2026 - vX.Y Type 1
+  Diabetes APP" / EN megfelelője). Az orvosi PDF-jelentés és a CSV-export
+  fájlneve Zoltán kérésére változatlanul tartalmazza a verziószámot
+  (index.html, js/app.js).
 
 ## v20.2 korrekció (2026. augusztus 14.)
 

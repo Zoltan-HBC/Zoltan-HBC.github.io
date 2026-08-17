@@ -11832,6 +11832,18 @@ function Settings({
     }, '↩️ ' + t('Alapértelmezett profilok visszaállítása'))
    )
   ], '', 'hbc-act-profiles-card'),
+  /* v20.3 (Zoltán kérése): NÉVJEGY / ABOUT csempe — a Beállítások alján, a
+     Használati útmutató FÖLÖTT. Ez az egyetlen hely, ahol az App neve és a
+     verziószám együtt jelenik meg — a fő fejlécben/splash-en a verzió helyett
+     mostantól csak az évszám ("Type 1 Diabetes APP 2026") látszik. */
+  card([
+   h('h2', {
+    className: 'font-black text-gray-800 mb-1'
+   }, 'ℹ️ ' + window.t('Névjegy')),
+   h('p', {
+    className: 'text-sm font-bold text-indigo-700'
+   }, (window.HBC_I18N.getLang() === 'en' ? 'HBC Diabetes Diary' : 'HBC Diabétesz Napló') + ' 2026 - v' + APP_VERSION + ' Type 1 Diabetes APP')
+  ]),
   /* v10.1: HASZNÁLATI ÚTMUTATÓ — magyar és angol PDF kézikönyv megnyitása/letöltése.
      Új lapon nyílik (asztalin böngésző PDF-néző, telefonon rendszer-megjelenítő);
      a ⬇ gomb azonnali mentés. Első megnyitás után a service worker cache-eli → offline is elérhető. */
@@ -12521,7 +12533,10 @@ function App() {
        window.t('HBC Diabétesz Napló')),
       h('p', {
        className: 'text-xs text-indigo-400 font-semibold'
-      }, 'v' + APP_VERSION + ' Type 1 Diabetes APP ⚡' + (effSettings.nickname ?
+      }, /* v20.3 (Zoltán kérése): a fő fejlécben a verziószám helyett az évszám
+            látszik — a verzió mostantól csak a Beállítások/Névjegy csempén
+            jelenik meg (l. Settings). A becenév-utótag változatlan. */
+       'Type 1 Diabetes APP ⚡ 2026' + (effSettings.nickname ?
        (window.HBC_I18N.getLang() === 'en' ? ' — ' + effSettings.nickname + "'s diary" : ' — ' + effSettings.nickname + ' naplója') : ''))
      )
     ),

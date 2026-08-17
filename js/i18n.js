@@ -290,6 +290,8 @@ window.HBC_I18N = (function() {
   'Tól:': 'From:',
   'Ig:': 'To:',
   'Ma': 'Today',
+  'Előző időszak': 'Previous period',
+  'Következő időszak': 'Next period',
   // Szinkron, mentés
   '💾 Teljes mentés (JSON)': '💾 Full backup (JSON)',
   '📊 CSV letöltése': '📊 Download CSV',

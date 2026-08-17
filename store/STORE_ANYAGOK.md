@@ -47,6 +47,6 @@ Követelmény: min. 2 db, 16:9 vagy 9:16, min. 320px. Funkciógrafika: 1024×500
 
 ## iOS-jegyzet
 
-App Store-megjelenéshez Apple Developer fiók (99 USD/év) és Mac gép szükséges
+App Store-megjelenéshez Apple Developer fiók és Mac gép szükséges
 (Xcode + PWA-burkoló, pl. PWABuilder iOS-csomagja). A PWA enélkül is telepíthető
 iPhone-ra a Safari „Hozzáadás a kezdőképernyőhöz" funkcióval — ezt ajánljuk első körben.

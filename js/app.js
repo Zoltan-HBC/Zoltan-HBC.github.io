@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '20.3';
+const APP_VERSION = '20.4';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -4884,24 +4884,32 @@ function Charts({
  const [mode, setMode] = useState('week');
  const [from, setFrom] = useState(subD(7));
  const [to, setTo] = useState(todayStr());
+ const [anchor, setAnchor] = useState(todayStr());
+ useEffect(() => {
+  setAnchor(todayStr());
+ }, [mode]);
  const bgR = useRef(null),
   carbR = useRef(null),
   insR = useRef(null),
   cgmR = useRef(null);
  const charts = useRef({});
 
+ const diffDays = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+ /* v20: helyi dátumformázó a léptető felirathoz (a fmtD ebben a komponensben nem elérhető) */
+ const fmtRangeD = s => new Date(s + 'T00:00:00').toLocaleDateString(window.HBC_LOCALE());
+
  const getRange = () => {
   if (mode === 'day') return {
-   f: todayStr(),
-   t: todayStr()
+   f: anchor,
+   t: anchor
   };
   if (mode === 'week') return {
-   f: subD(7),
-   t: todayStr()
+   f: addD(anchor, -7),
+   t: anchor
   };
   if (mode === 'month') return {
-   f: subD(30),
-   t: todayStr()
+   f: addD(anchor, -30),
+   t: anchor
   };
   return {
    f: from,
@@ -4913,6 +4921,46 @@ function Charts({
   f,
   t
  } = getRange();
+
+ /* v20: léptető nyilak a Grafikonok oldal grafikonjai alatt — a kiválasztott
+    szűrő (Nap/Hét/Hónap/Egyéni) tartományát léptetik közösen, mind a 4 grafikonon */
+ const stepSpanDays = mode === 'day' ? 1 : mode === 'week' ? 7 : mode === 'month' ? 30 : diffDays(from, to);
+ const canStepNext = mode === 'custom' ? to < todayStr() : anchor < todayStr();
+ const rangeLabel = f === t ? fmtRangeD(f) : `${fmtRangeD(f)} – ${fmtRangeD(t)}`;
+ const stepRange = dir => {
+  if (dir > 0 && !canStepNext) return;
+  if (mode === 'custom') {
+   let nf = addD(from, dir * stepSpanDays);
+   let nt = addD(to, dir * stepSpanDays);
+   if (nt > todayStr()) {
+    const overshoot = diffDays(todayStr(), nt);
+    nf = addD(nf, -overshoot);
+    nt = todayStr();
+   }
+   setFrom(nf);
+   setTo(nt);
+  } else {
+   let na = addD(anchor, dir * stepSpanDays);
+   if (na > todayStr()) na = todayStr();
+   setAnchor(na);
+  }
+ };
+ const rangeStepper = h('div', {
+  className: 'flex items-center justify-center gap-3 mt-3'
+ }, h('button', {
+  type: 'button',
+  onClick: () => stepRange(-1),
+  className: 'w-10 h-10 bg-indigo-100 hover:bg-indigo-200 rounded-xl font-bold text-indigo-700 flex items-center justify-center',
+  'aria-label': window.t('Előző időszak')
+ }, '◀'), h('span', {
+  className: 'text-sm font-bold text-gray-600 min-w-[9rem] text-center'
+ }, rangeLabel), h('button', {
+  type: 'button',
+  disabled: !canStepNext,
+  onClick: () => stepRange(1),
+  className: 'w-10 h-10 bg-indigo-100 hover:bg-indigo-200 rounded-xl font-bold text-indigo-700 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed',
+  'aria-label': window.t('Következő időszak')
+ }, '▶'));
  const filtered = useMemo(() => sortedByTS(filterRange(entries, f, t)), [entries, f, t]);
  const bgD = filtered.filter(e => e.bloodGlucose);
  const carbD = filtered.filter(e => e.carbs);
@@ -5208,28 +5256,28 @@ function Charts({
    className: 'chart-container'
   }, h('canvas', {
    ref: bgR
-  }))]),
+  })), rangeStepper]),
   cgmD.length > 0 && card([h('h3', {
    className: 'font-black text-gray-800 mb-3'
   }, `📡 CGM szenzor (${cgmD.length} mérés)`), h('div', {
    className: 'chart-container'
   }, h('canvas', {
    ref: cgmR
-  }))]),
+  })), rangeStepper]),
   card([h('h3', {
    className: 'font-black text-gray-800 mb-3'
   }, `🍽️ Szénhidrát (${carbD.length} étkezés)`), h('div', {
    className: 'chart-container'
   }, h('canvas', {
    ref: carbR
-  }))]),
+  })), rangeStepper]),
   card([h('h3', {
    className: 'font-black text-gray-800 mb-3'
   }, `💉 Inzulin (${insD.length} adag)`), h('div', {
    className: 'chart-container'
   }, h('canvas', {
    ref: insR
-  }))])
+  })), rangeStepper])
  );
 }
 
@@ -7737,6 +7785,67 @@ function AddEntry({
    ...preserveTimesOnShift(p, newTs)
   };
  });
+ /* v20.4 (Zoltán kérésére): az ételek sorrendje húzással (⠿ fogantyú) módosítható —
+    ugyanaz a pointer-alapú húzás-logika, mint az SOS-lap csempéinél (startDrag),
+    egérrel és ujjal (touch) egyaránt működik. A sorrend csak a bejegyzésen belüli
+    megjelenítést érinti, a végösszeget (CH, stb.) nem befolyásolja. */
+ const [dragFoodFid, setDragFoodFid] = useState(null);
+ const foodRowRefs = useRef({});
+ const startFoodDrag = (fid, e) => {
+  e.preventDefault();
+  setDragFoodFid(fid);
+  const move = ev => {
+   const y = ev.clientY != null ? ev.clientY : (ev.touches && ev.touches[0] && ev.touches[0].clientY);
+   if (y == null) return;
+   setForm(p => {
+    const cur = p.foods;
+    const from = cur.findIndex(f => f.fid === fid);
+    if (from < 0) return p;
+    let to = from;
+    cur.forEach((f, i) => {
+     if (f.fid === fid) return;
+     const el = foodRowRefs.current[f.fid];
+     if (!el) return;
+     const r = el.getBoundingClientRect();
+     const mid = r.top + r.height / 2;
+     if (i < from && y < mid) to = Math.min(to, i);
+     if (i > from && y > mid) to = Math.max(to, i);
+    });
+    if (to === from) return p;
+    const foods = cur.slice();
+    const [item] = foods.splice(from, 1);
+    foods.splice(to, 0, item);
+    return {
+     ...p,
+     foods
+    };
+   });
+  };
+  const up = () => {
+   window.removeEventListener('pointermove', move);
+   window.removeEventListener('pointerup', up);
+   window.removeEventListener('pointercancel', up);
+   setDragFoodFid(null);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+ };
+ const foodDragHandle = fid => h('span', {
+  onPointerDown: e => startFoodDrag(fid, e),
+  title: window.t('Húzd az ételek sorrendjének módosításához'),
+  'aria-label': window.t('Húzd az ételek sorrendjének módosításához'),
+  style: {
+   cursor: 'grab',
+   touchAction: 'none',
+   color: '#9ca3af',
+   fontSize: '16px',
+   lineHeight: '1',
+   padding: '2px 5px 2px 0',
+   userSelect: 'none'
+  },
+  className: 'shrink-0'
+ }, '⠿');
  /* v20 (feladat 4): soronkénti gramm és CH(g) szabad, egymástól független
     szerkesztése (a korábbi 1–10-es egész szorzó megszűnt) */
  const setFoodGrams = (fid, grams) => setForm(p => ({
@@ -8214,10 +8323,18 @@ function AddEntry({
      },
      form.foods.map(f => h('div', {
        key: f.fid,
+       ref: el => {
+        foodRowRefs.current[f.fid] = el;
+       },
        /* v18.7 FIX (feladat 1 — konzisztensen az Edit-modallal): flex-wrap,
           hogy hosszú ételnévnél a vezérlők ne lógjanak ki */
-       className: 'hbc-fooditem-row bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'
+       className: 'hbc-fooditem-row bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200',
+       style: dragFoodFid === f.fid ? {
+        outline: '2px dashed #f59e0b',
+        opacity: .92
+       } : undefined
       },
+      foodDragHandle(f.fid),
       h('div', {
        className: 'hbc-fooditem-name'
       }, h('p', {
@@ -8821,6 +8938,67 @@ function EditModal({
    ...preserveTimesOnShift(p, newTs)
   };
  });
+ /* v20.4 (Zoltán kérésére): az ételek sorrendje húzással (⠿ fogantyú) módosítható
+    utólagos szerkesztésnél (EditModal) is — lásd az AddEntry azonos blokkjánál
+    lévő magyarázatot; ugyanaz a pointer-alapú húzás-logika, mint az SOS-lap
+    csempéinél. */
+ const [dragFoodFid, setDragFoodFid] = useState(null);
+ const foodRowRefs = useRef({});
+ const startFoodDrag = (fid, e) => {
+  e.preventDefault();
+  setDragFoodFid(fid);
+  const move = ev => {
+   const y = ev.clientY != null ? ev.clientY : (ev.touches && ev.touches[0] && ev.touches[0].clientY);
+   if (y == null) return;
+   setForm(p => {
+    const cur = p.foods || [];
+    const from = cur.findIndex(f => f.fid === fid);
+    if (from < 0) return p;
+    let to = from;
+    cur.forEach((f, i) => {
+     if (f.fid === fid) return;
+     const el = foodRowRefs.current[f.fid];
+     if (!el) return;
+     const r = el.getBoundingClientRect();
+     const mid = r.top + r.height / 2;
+     if (i < from && y < mid) to = Math.min(to, i);
+     if (i > from && y > mid) to = Math.max(to, i);
+    });
+    if (to === from) return p;
+    const foods = cur.slice();
+    const [item] = foods.splice(from, 1);
+    foods.splice(to, 0, item);
+    return {
+     ...p,
+     foods
+    };
+   });
+  };
+  const up = () => {
+   window.removeEventListener('pointermove', move);
+   window.removeEventListener('pointerup', up);
+   window.removeEventListener('pointercancel', up);
+   setDragFoodFid(null);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+ };
+ const foodDragHandle = fid => h('span', {
+  onPointerDown: e => startFoodDrag(fid, e),
+  title: window.t('Húzd az ételek sorrendjének módosításához'),
+  'aria-label': window.t('Húzd az ételek sorrendjének módosításához'),
+  style: {
+   cursor: 'grab',
+   touchAction: 'none',
+   color: '#9ca3af',
+   fontSize: '16px',
+   lineHeight: '1',
+   padding: '2px 5px 2px 0',
+   userSelect: 'none'
+  },
+  className: 'shrink-0'
+ }, '⠿');
  /* v20 (feladat 4): soronkénti gramm és CH(g) szabad, egymástól független
     szerkesztése (a korábbi 1–10-es egész szorzó megszűnt) — utólagos
     szerkesztésnél (EditModal) is elérhető, nem csak felviteltnél. */
@@ -9223,10 +9401,18 @@ function EditModal({
        },
        form.foods.map(f => h('div', {
          key: f.fid,
+         ref: el => {
+          foodRowRefs.current[f.fid] = el;
+         },
          /* v18.7 FIX (feladat 1): flex-wrap — hosszú ételnévnél a jobb oldali
             vezérlők (idő/szorzó/❌) új sorba kerülnek, sosem lógnak ki a kártyából */
-         className: 'hbc-fooditem-row bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200'
+         className: 'hbc-fooditem-row bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-200',
+         style: dragFoodFid === f.fid ? {
+          outline: '2px dashed #f59e0b',
+          opacity: .92
+         } : undefined
         },
+        foodDragHandle(f.fid),
         h('div', {
          className: 'hbc-fooditem-name'
         }, h('p', {

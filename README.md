@@ -8,6 +8,31 @@ Telefonra, tabletre, laptopra és asztali gépre (PWA).
 2. **DRIVE_BEALLITASI_UTMUTATO.md** — Google Drive szinkron + Andi követő módja + riasztások
 3. **store/** mappa — Google Play megjelenés anyagai és útmutatója
 
+## v20.3 korrekció (2026. augusztus 17.)
+
+- **📱 "Ételek a bejegyzésben" — túl magas kártya mobil álló nézetben:** a
+  hozzáadott étel-tétel sora (idő / mód / mennyiség / ráta / CH-összeg /
+  törlés — akár 6 mező) korábban szabad flex-wrap-re volt bízva 480px alatt,
+  ami keskeny, álló mobil nézetben kiszámíthatatlanul, akár 4-5 sorba törte a
+  mezőket — a kártya emiatt irrelevánsan magas, "négyzetes" dobozzá nőtt.
+  Megoldás: 480px alatt a mezők egy fix, 3 oszlopos rácsba rendeződnek, ami
+  az elemszámtól függetlenül mindig legfeljebb 2 sorba fér — kompakt,
+  kiszámítható magassággal (css/custom.css).
+- **🌙 Sötét mód — "Egyéb tevékenység" szövegek kontrasztja:** a csempe
+  háttere sötét módban sötétbarnára váltott, de a rajta lévő feliratokhoz
+  (text-yellow-800/700) soha nem készült sötét módú felülírás — a világos
+  módra tervezett közepes barna szín rossz, nehezen olvasható kontraszttal
+  jelent meg a sötét háttéren. Pótolva a többi szín (amber/indigo/purple)
+  mintájára, WCAG AAA kontraszttal (css/custom.css).
+- **▾ "Egyéb tevékenység" — nagyobb legördítő-háromszög:** a korábbi
+  tevékenységek listáját nyitó/csukó ▸/▾ jelzés a felirattal azonos, nehezen
+  észrevehető méretű volt — önálló, nagyobb betűméretű elembe emelve
+  (js/app.js).
+- **➕ "Bejegyzés szerkesztése" — hiányzó "Új étel mentése adatbázisba":** ez
+  a lehetőség eddig csak az "Új bejegyzés" űrlapon volt elérhető; mostantól
+  az utólagos szerkesztésnél (Bejegyzés szerkesztése) is elmenthető egy új
+  étel az adatbázisba (js/app.js).
+
 ## v20.2 korrekció (2026. augusztus 14.)
 
 - **📱💻 Responsive-ellenőrzés (mobil + asztali nézet):** átfogó ellenőrzés

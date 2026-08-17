@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '20.2';
+const APP_VERSION = '20.3';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -7482,12 +7482,21 @@ function ActivityFields({
   h('div', null,
    /* v20 (feladat 3): a lista alapból ÖSSZECSUKOTT állapotban jelenik meg —
       a felirat gombra kattintva nyílik/csukódik, hogy sok korábbi tevékenység
-      esetén se foglaljon feleslegesen helyet az űrlapon. */
+      esetén se foglaljon feleslegesen helyet az űrlapon.
+      v20.3 FIX (Zoltán jelzése): a legördítést jelző ▸/▾ háromszög a felirattal
+      azonos (text-sm) méretű, nehezen észrevehető volt — önálló, nagyobb
+      betűméretű elembe emelve, a felirat mérete változatlan marad. */
    h('button', {
     type: 'button',
     onClick: () => setPickerOpen(p => !p),
     className: 'text-sm font-bold text-yellow-800 flex items-center gap-1 mb-1 w-full text-left'
-   }, (pickerOpen ? '▾ ' : '▸ ') + '🏃 ' + window.t('Tevékenység (választás a korábbiakból)')),
+   },
+    h('span', {
+     className: 'text-xl leading-none',
+     'aria-hidden': 'true'
+    }, pickerOpen ? '▾' : '▸'),
+    '🏃 ' + window.t('Tevékenység (választás a korábbiakból)')
+   ),
    /* v20 (feladat 3): a korábbi egyszerű <select> helyett kereshető lista —
       sok korábbi tevékenység esetén a beírt szöveg szűkíti a találatokat,
       egy kattintással hozzáadható a bejegyzéshez. */
@@ -8675,6 +8684,8 @@ function EditModal({
  settings,
  showConfirm,
  allFoods,
+ onAddFood, /* v20.3 (feladat 4, Zoltán jelzése): "Új étel mentése adatbázisba" — l. AddEntry azonos logikáját */
+ showAlert, /* v20.3 (feladat 4): a saveNewFood visszajelzéséhez */
  entries
 }) {
  /* v11.1: ÉTEL-SZERKESZTÉS — a bejegyzés ételei utólag is bővíthetők/törölhetők.
@@ -8741,11 +8752,31 @@ function EditModal({
  });
  const [showPicker, setShowPicker] = useState(false);
  const [fSearch, setFSearch] = useState('');
+ /* v20.3 (feladat 4, Zoltán jelzése): "Új étel mentése adatbázisba" mini-űrlap
+    állapota — az AddEntry-ben már meglévő logika pontos megfelelője, hogy
+    utólagos szerkesztésnél (Bejegyzés szerkesztése) is elérhető legyen. */
+ const [nfName, setNfName] = useState('');
+ const [nfCarbs, setNfCarbs] = useState('');
+ const [nfUnit, setNfUnit] = useState('');
  /* v20 (feladat 5): aktivitás/hőség profil + hőmérséklet-lekérdezés utólagos
     szerkesztéshez (korábban csak Új bejegyzésnél volt elérhető) */
  const [weatherBusy, setWeatherBusy] = useState(false);
  const [weatherErr, setWeatherErr] = useState('');
  const shownFoods = (allFoods || []).filter(f => f.name.toLowerCase().includes(fSearch.toLowerCase()));
+ /* v20.3 (feladat 4): l. AddEntry azonos nevű függvényének megjegyzését */
+ const saveNewFood = () => {
+  if (!nfName || !nfCarbs) return;
+  onAddFood({
+   name: nfName,
+   carbs: parseInt(nfCarbs),
+   unit: nfUnit || '1 adag',
+   isDefault: false
+  });
+  setNfName('');
+  setNfCarbs('');
+  setNfUnit('');
+  showAlert && showAlert('✅ Étel mentve az adatbázisba!');
+ };
  /* v18.7 FIX (feladat 3): a beépített magyar CH-táblázat (205 tétel) az Új
     bejegyzésnél már böngészhető volt, de az Edit-modalból (Bejegyzés
     szerkesztése) hiányzott — ugyanaz a logika, itt is elérhető. */
@@ -9052,6 +9083,50 @@ function EditModal({
       showPicker && h('div', {
         className: 'border-2 border-indigo-200 rounded-2xl p-3 bg-indigo-50 mb-2'
        },
+       /* v20.3 (feladat 4, Zoltán jelzése): "Új étel mentése adatbázisba" — az
+          AddEntry-ben már meglévő mini-űrlap pontos megfelelője, hogy utólagos
+          szerkesztésnél is elmenthető legyen egy új étel az adatbázisba. */
+       h('div', {
+         className: 'mb-3 pb-3 border-b-2 border-indigo-200'
+        },
+        h('p', {
+         className: 'text-xs font-black text-indigo-700 mb-2'
+        }, '➕ Új étel mentése adatbázisba:'),
+        h('div', {
+          className: 'grid grid-cols-3 gap-2 mb-2'
+         },
+         h('input', {
+          type: 'text',
+          value: nfName,
+          onChange: e => setNfName(e.target.value),
+          placeholder: 'Étel neve',
+          className: 'col-span-2 border border-indigo-300 rounded-xl px-2 py-1.5 text-xs focus:outline-none'
+         }),
+         h('input', {
+          type: 'number',
+          value: nfCarbs,
+          onChange: e => setNfCarbs(e.target.value),
+          placeholder: 'CH(g)',
+          className: 'border border-indigo-300 rounded-xl px-2 py-1.5 text-xs focus:outline-none'
+         })
+        ),
+        h('div', {
+          className: 'flex gap-2'
+         },
+         h('input', {
+          type: 'text',
+          value: nfUnit,
+          onChange: e => setNfUnit(e.target.value),
+          placeholder: 'Egység',
+          className: 'flex-1 border border-indigo-300 rounded-xl px-2 py-1.5 text-xs focus:outline-none'
+         }),
+         h('button', {
+          type: 'button',
+          onClick: saveNewFood,
+          className: 'bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold'
+         }, 'Ment')
+        )
+       ),
        h('input', {
         type: 'text',
         value: fSearch,
@@ -12724,6 +12799,8 @@ function App() {
    settings,
    showConfirm,
    allFoods,
+   onAddFood: addFood, /* v20.3 (feladat 4, Zoltán jelzése): "Új étel mentése adatbázisba" a szerkesztésben is */
+   showAlert,
    entries
   }),
   /* v14: követő részletnézet — szem ikonra nyílik, csak olvasható.

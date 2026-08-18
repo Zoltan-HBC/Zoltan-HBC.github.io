@@ -32,6 +32,10 @@
 .hbc-hover-bg-blue-200:hover{background-color:#bfdbfe}
 .hbc-hover-bg-emerald-200:hover{background-color:#a7f3d0}
 .hbc-hover-bg-yellow-100:hover{background-color:#fef9c3}
+/* v20.6 (Feladat 2, Zoltán kérésére): Alvás gyorsgombok hover-állapota */
+.hbc-hover-bg-teal-200:hover{background-color:#99f6e4}
+/* v20.6 (Feladat 3, Zoltán kérésére): keresés-javaslatlista sorainak hover-állapota */
+.hbc-hover-bg-indigo-100:hover{background-color:#e0e7ff}
 .hbc-hover-text-indigo-500:hover{color:#6366f1}
 .hbc-hover-text-indigo-800:hover{color:#3730a3}
 .hbc-hover-text-purple-600:hover{color:#9333ea}
@@ -213,6 +217,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 [data-hbc-dark] input,[data-hbc-dark] select,[data-hbc-dark] textarea{
   background-color:#241f3d;color:#eceaf6;border-color:#3a3358}
 [data-hbc-dark] input[type=date],[data-hbc-dark] input[type=datetime-local]{color-scheme:dark}
+
+/* ═══════════ v20.5 FIX (korrekció 2, Zoltán jelzése) — HAJNALI JELENSÉG /
+   SOMOGYI-HATÁS KÁRTYA GYENGE KONTRASZTJA SÖTÉT MÓDBAN ═══════════
+   A Statisztika oldal "Hajnali jelenség / Somogyi-hatás" kártyája 5 olyan
+   Tailwind segédosztályt használ, amelyeknek eddig nem volt [data-hbc-dark]
+   felülírása, ezért sötét módban is a világos módbeli (sötét szöveg /
+   világos háttér) színükkel jelentek meg → olvashatatlan. Az itteni
+   értékek a fájlban már bevett konvenciót követik (pasztell -700 szöveg,
+   elsötétített -50 háttér, sötétített -200 keret). */
+[data-hbc-dark] .text-gray-700{color:#c3bede!important}
+[data-hbc-dark] .text-rose-700{color:#f5b8cf!important}
+[data-hbc-dark] .bg-rose-50{background-color:#2f1a22!important}
+[data-hbc-dark] .border-rose-200{border-color:#4a2635!important}
+[data-hbc-dark] .border-amber-200{border-color:#4a3a1f!important}
 
 /* ═══════════ v12.3 FIX — BEJEGYZÉS-CÍMKÉK (BADGE) SÖTÉT MÓDBAN ═══════════
    A bejegyzéskártyák kis címkéi (vércukor, CH, inzulin, mozgás) világos
@@ -409,9 +427,20 @@ html.hbc-bigfont .text-\[10px\],html.hbc-bigfont .text-\[11px\]{font-size:.75rem
    nőtt. Megoldás: 480px alatt a vezérlősor egy fix, 3 oszlopos ráccsá
    alakul — ez az elemszámtól függetlenül mindig legfeljebb 2 sorba
    rendezi a mezőket, kompakt, kiszámítható magassággal. */
+/* ═══════════ v20.5 FIX (korrekció 1, Zoltán jelzése) — A NÉVMEZŐ 140px-ES
+   flex-basis-e (desktop szélesség-javaslat) A SOR OSZLOPPÁ VÁLÁSA UTÁN
+   TÉVESEN MAGASSÁGKÉNT ÉRVÉNYESÜLT ═══════════
+   A .hbc-fooditem-name eredeti "flex:1 1 140px" szabálya (sor 383) a
+   flex-basis-t csak SZÉLESSÉGKÉNT szánta (desktop, sorlayout). A v20.3-as
+   media query flex-direction:column-ra váltja a szülő sort, de a
+   flex-basis-t nem állította vissza — így a 140px innentől a FŐTENGELY
+   (azaz a MAGASSÁG) mentén érvényesült, ez okozta az irrelevánsan magas,
+   "négyzetes" ételkártyát álló mobil nézetben (mérve: 140px magas
+   névblokk). Megoldás: 480px alatt a névblokk flex-basis-ét explicit
+   auto-ra állítjuk, a magasság ismét a tartalomhoz igazodik. */
 @media (max-width:480px){
  .hbc-fooditem-row{flex-direction:column;align-items:stretch}
- .hbc-fooditem-name{min-width:0;width:100%}
+ .hbc-fooditem-name{min-width:0;width:100%;flex:0 0 auto}
  .hbc-fooditem-ctrls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:center;gap:.4rem;width:100%}
  .hbc-fooditem-ctrls>input[type=time]{width:100%;box-sizing:border-box}
  .hbc-fooditem-mode{width:100%;flex:none;box-sizing:border-box}

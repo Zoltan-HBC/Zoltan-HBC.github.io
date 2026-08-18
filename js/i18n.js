@@ -250,6 +250,12 @@ window.HBC_I18N = (function() {
   'Hajnali jelenség / Somogyi-hatás (tájékoztató)': 'Dawn phenomenon / Somogyi effect (informational)',
   'hajnali jelenség-gyanú': 'suspected dawn phenomenon',
   'Somogyi-gyanú': 'suspected Somogyi effect',
+  /* v20.5 (feladat 1, Zoltán kérésére): a Statisztika oldal hajnali jelenség/Somogyi-hatás
+     csempéire koppintva megjelenő magyarázat — szövege a Kézikönyv 7. old. szószedetéből. */
+  'Hajnali jelenség': 'Dawn phenomenon',
+  'Somogyi-hatás': 'Somogyi effect',
+  'Reggeli, jellemzően CH-bevitel és gyors inzulin nélküli vércukor-emelkedés, a szervezet hajnali hormonális folyamatai miatt. A napló automatikusan felismeri és jelzi — tájékoztató jelleggel, nem diagnózis.': 'A morning blood glucose rise, typically without carb intake or rapid insulin, caused by the body\'s early-morning hormonal processes. The diary detects and flags it automatically — for informational purposes only, not a diagnosis.',
+  'A hajnali jelenséghez hasonló reggeli vércukor-emelkedés, amelyet éjszakai alacsony vércukor (hipoglikémia) előzött meg — a szervezet ellenszabályozó válasza. A napló ezt a hajnali jelenségtől elkülönítve jelzi.': 'A morning blood glucose rise similar to the dawn phenomenon, but preceded by low blood glucose overnight (hypoglycemia) — the body\'s counter-regulatory response. The diary flags this separately from the dawn phenomenon.',
   'éjszaka közül mutatott figyelemre méltó reggeli emelkedést': 'nights showed a notable morning rise',
   'Átlagos emelkedés': 'Average rise',
   'Ez az elemzés kizárólag tájékoztató jellegű mintafelismerés a rögzített naplóadatok alapján — nem diagnózis és nem automatikus dózisjavaslat. A hajnali jelenség és a Somogyi-hatás kezelése eltérő lehet, a végső döntést mindig a kezelőorvos hozza meg!': 'This analysis is an informational pattern detection based on recorded diary data only — it is not a diagnosis and not an automatic dosing suggestion. Managing dawn phenomenon vs. the Somogyi effect can differ — the treating physician always makes the final decision!',
@@ -392,6 +398,13 @@ window.HBC_I18N = (function() {
   'Ez a szám becslés, nem laboreredmény!': 'This number is an estimate, not a lab result!',
   'javaslat, nem orvosi utasítás': 'suggestion, not medical advice',
   'Sorozat': 'Streak',
+  /* v20.6 (Zoltán jelzése): a Sorozat-kártya alapértelmezett (nem szerkesztett)
+     feliratai — a kártya SZÖVEGE a Beállításokban szabadon felülírható, ezért
+     a fordítás csak az EREDETI, alapértelmezett szöveget találja el; az egyéni
+     szöveget a felhasználó minden nyelven a saját megfogalmazásában látja. */
+  '🔥 Sorozat': '🔥 Streak',
+  'napja áramlik veled az egyensúly energiája': 'days of balance energy flowing with you',
+  '✨ Csodás! Az univerzum is veled tart — őrizd ezt a szép áramlást!': '✨ Amazing! The universe is flowing with you too — keep this beautiful flow going!',
   // ── v7.0.1: teljes lefedettség ──
   '💉 Ma eddig beadott inzulin': '💉 Insulin taken today',
   '📊 Átlag vércukor (7 nap)': '📊 Average glucose (7 days)',
@@ -489,6 +502,16 @@ window.HBC_I18N = (function() {
   'Új tevékenység neve (pl. Séta, Kertészkedés) — többet vesszővel válassz el': 'New activity name (e.g. Walk, Gardening) — separate several with commas',
   'Időtartam (tól–ig)': 'Duration (from–to)',
   'Időtartam': 'Duration',
+  /* v20.8 FIX (Zoltán jelzése, mobil spot-check): az Egyéb tevékenység
+     időtartam-blokkjában window.t()-be már be volt csomagolva ez a néhány
+     szöveg, csak a szótárkulcsok hiányoztak. */
+  'Időtartam (visszafelé, a rögzítés idejéig)': 'Duration (backward, until the logging time)',
+  'Kezdete': 'Start',
+  'Vége': 'End',
+  'Pontos kezdés/befejezés megadása': 'Set exact start/end',
+  'Vissza a csúszkás becsléshez': 'Back to slider estimate',
+  'Keresés a korábbi tevékenységek közt...': 'Search among previous activities...',
+  'Nincs találat.': 'No results.',
   'nincs megadva': 'not set',
   'eddig': 'until',
   'Fizikai aktivitás (1–5)': 'Physical activity (1–5)',
@@ -505,6 +528,22 @@ window.HBC_I18N = (function() {
   'Közepes': 'Moderate',
   'Megerőltető': 'Strenuous',
   'Nagyon megerőltető': 'Very strenuous',
+  /* v20.7 FIX (Zoltán jelzése): az aktivitás/hőség profilok alapértelmezett
+     (nem egyénileg átírt) nevei és "extra CH" emlékeztetői — l. actProfile.name
+     és actProfile.extraCH window.t()-be csomagolva a felhasználási helyeken. */
+  'Alap (nincs korrekció)': 'Base (no correction)',
+  'Könnyű házimunka (pl. takarítás, autómosás)': 'Light housework (e.g. cleaning, washing the car)',
+  'Kerti munka – enyhén meleg': 'Garden work – mildly hot',
+  'Kerti munka – extrém meleg': 'Garden work – extremely hot',
+  'Szőlőcukor 2-3 db / kb. 10-15g CH': 'Glucose tablets 2-3 pcs / approx. 10-15g carbs',
+  'Fanta/üdítő 2 dl / kb. 20g CH': 'Fanta/soft drink 2 dl / approx. 20g carbs',
+  /* v20.7 FIX (Zoltán jelzése): MOTIV_MSG_DEFAULTS motivációs toast-üzenetek */
+  '✅ Szuper! Céltartományban vagy! 👏': "✅ Great! You're in range! 👏",
+  '✨ Minden bejegyzéssel önmagadért teszel — csodásan csinálod!': "✨ Every entry is something you do for yourself — you're doing wonderfully!",
+  '🌟 A tested hálás minden odafigyelésért!': '🌟 Your body is grateful for every bit of attention!',
+  '🧘 Egyensúly és harmónia — jó úton jársz!': "🧘 Balance and harmony — you're on the right track!",
+  '💪 A rendszeresség a legjobb gyógyítód!': '💪 Consistency is your best medicine!',
+  '🌈 Apró lépések, nagy változások — büszke lehetsz magadra!': '🌈 Small steps, big changes — you can be proud of yourself!',
   // ═══ v17: bázisinzulin-emlékeztető ═══
   'Bázis beadásának időpontja': 'Basal injection time',
   'Emlékeztető ennyivel előbb': 'Show reminder this much earlier',
@@ -569,7 +608,32 @@ window.HBC_I18N = (function() {
   'szep.': 'Sep',
   'okt.': 'Oct',
   'nov.': 'Nov',
-  'dec.': 'Dec'
+  'dec.': 'Dec',
+  // ═══ v20.6 (Feladat 2, Zoltán kérésére): Alvás (Lefekvés/Ébredés) ═══
+  'Alvás': 'Sleep',
+  'Esemény': 'Event',
+  'Lefekvés': 'Bedtime',
+  'Ébredés': 'Wake-up',
+  'Elalvás': 'Sleep duration',
+  'Utolsó': 'Last',
+  'Bejegyzés szerkesztése': 'Edit entry',
+  'Időpont (utólag is módosítható!)': 'Time (can be changed later!)',
+  'Jegyzet': 'Note',
+  'Mentés': 'Save',
+  // ═══ v20.6 (Feladat 3, Zoltán kérésére): strukturált szűrő-panel + "Hozzáadás a Riporthoz" ═══
+  'Részletes szűrés': 'Detailed filters',
+  'Fizikai aktivitás (legalább)': 'Physical activity (at least)',
+  'Étel/folyadék mód': 'Food/liquid mode',
+  'Szilárd (g)': 'Solid (g)',
+  'Folyadék (ml)': 'Liquid (ml)',
+  'Darab (db)': 'Piece (ct)',
+  'Vércukor-tartomány': 'Blood glucose range',
+  'Cél': 'Target',
+  'Keresés': 'Search',
+  'Összes bejegyzés': 'All entries',
+  'bejegyzés': 'entries',
+  'Hozzáadás a szűrt nézet az Orvosi riporthoz': 'Add the filtered view to the Medical report',
+  'A riport kiegészül a szűrt nézettel': 'The report will include the filtered view'
  };
 
  /* Mintaalapú fordítás dinamikus (számot/nevet tartalmazó) szövegekhez.

@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '20.4';
+const APP_VERSION = '20.9';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -4130,7 +4130,14 @@ const ACT_LEVEL_DEFAULTS = ['Nagyon könnyű', 'Könnyű', 'Közepes', 'Megeről
 function actLevelName(settings, n) {
  const arr = (settings && Array.isArray(settings.actLevels)) ? settings.actLevels : [];
  const v = arr[n - 1];
- return (v && String(v).trim()) ? v : window.t(ACT_LEVEL_DEFAULTS[n - 1] || '');
+ /* v20.7 FIX (Zoltán jelzése): a `v` ág korábban window.t() NÉLKÜL tért vissza — mivel
+    a DEFAULT_SETTINGS.actLevels a magyar ACT_LEVEL_DEFAULTS-szal van előre feltöltve,
+    `v` a gyakorlatban SOSEM üres, tehát ez az ág futott mindig, a window.t()-es ág pedig
+    élő kódként sosem. A teljes visszatérési értéket window.t()-be csomagolva az
+    alapértelmezett (nem egyénileg átírt) nevek is helyesen fordulnak angol nézetben;
+    az egyénileg átírt nevek nem egyeznek szótárkulccsal, ezért változatlanul, a
+    felhasználó saját megfogalmazásában jelennek meg minden nyelven. */
+ return window.t((v && String(v).trim()) ? v : (ACT_LEVEL_DEFAULTS[n - 1] || ''));
 }
 /* A korábban felvitt tevékenységnevek egyedi listája (gyorsválasztóhoz, szűrőhöz) */
 function activityNames(entries) {
@@ -4164,6 +4171,10 @@ function EntryCard({
   'Kontroll': 'bg-blue-50 border-blue-200',
   'Lantus': 'bg-purple-50 border-purple-200',
   'Egyéb tevékenység': 'bg-yellow-50 border-yellow-200',
+  /* v20.6 (Feladat 2, Zoltán kérésére): Alvás (Lefekvés/Ébredés) — teal, hogy
+     vizuálisan is elkülönüljön a másik 4 típustól; a teal-50/teal-200 már
+     rendelkezik sötét módú felülírással (l. custom.css). */
+  'Alvás': 'bg-teal-50 border-teal-200',
  };
  const mealC = {
   'Reggeli': 'bg-amber-100 text-amber-800',
@@ -4244,6 +4255,12 @@ function EntryCard({
    bg: 'bg-orange-100 text-orange-700',
    text: '⚡ ' + entry.activityLevel + '/5 – ' + actLevelName(settings, entry.activityLevel)
   }),
+  /* v20.6 (Feladat 2, Zoltán kérésére): Alvás-esemény (Lefekvés/Ébredés) címkéje */
+  entry.type === 'Alvás' && entry.sleepEvent && h(Badge, {
+   key: 'sleep',
+   bg: 'bg-teal-100 text-teal-700',
+   text: (entry.sleepEvent === 'ebredes' ? '☀️ ' : '🛌 ') + window.t(entry.sleepEvent === 'ebredes' ? 'Ébredés' : 'Lefekvés')
+  }),
   /* v14: privát bejegyzés jelölése — csak a Tulajdonos látja (követőhöz el sem jut) */
   entry.private && h(Badge, {
    key: 'priv',
@@ -4255,7 +4272,7 @@ function EntryCard({
   entry.activityProfileId && entry.activityProfilePct ? h(Badge, {
    key: 'actp',
    bg: 'bg-teal-100 text-teal-700',
-   text: '🌡️ ' + entry.activityProfileName + ' ' + (entry.activityProfilePct > 0 ? '+' : '') + entry.activityProfilePct + '%' + (entry.weatherTemp != null && entry.weatherTemp !== '' ? ' · ' + entry.weatherTemp + '°C' : '')
+   text: '🌡️ ' + window.t(entry.activityProfileName) + ' ' + (entry.activityProfilePct > 0 ? '+' : '') + entry.activityProfilePct + '%' + (entry.weatherTemp != null && entry.weatherTemp !== '' ? ' · ' + entry.weatherTemp + '°C' : '')
   }) : null
  ];
  const notesNode = entry.notes && h('p', {
@@ -4344,6 +4361,30 @@ function EntryCard({
  );
 }
 
+/* v20.6 (Feladat 2, Zoltán kérésére): a legutóbbi Alvás-esemény (Lefekvés/
+   Ébredés) + ha az utolsó két Alvás-bejegyzés egy lefekvés→ébredés párt alkot,
+   az elalvás időtartama is — kizárólag tájékoztató jelleggel, az Áttekintés
+   csempéjéhez. */
+function lastSleepInfo(entries) {
+ const sleeps = (entries || [])
+  .filter(e => e && e.type === 'Alvás' && e.sleepEvent)
+  .slice()
+  .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+ if (!sleeps.length) return null;
+ const last = sleeps[sleeps.length - 1];
+ const prev = sleeps.length > 1 ? sleeps[sleeps.length - 2] : null;
+ let durationMin = null;
+ if (last.sleepEvent === 'ebredes' && prev && prev.sleepEvent === 'lefekves') {
+  durationMin = Math.round((new Date(last.timestamp) - new Date(prev.timestamp)) / 60000);
+ }
+ return {
+  last,
+  prev,
+  durationMin
+ };
+}
+window.lastSleepInfo = lastSleepInfo;
+
 // ═══════════ DASHBOARD ═══════════
 function Dashboard({
  entries,
@@ -4352,7 +4393,8 @@ function Dashboard({
  onView, /* v19.1: Tulajdonos módban is elérhető csak-olvasó "szem" nézet */
  settings,
  onAdd,
- onNoteSave /* v15: a Legutóbbi vércukor kártya megjegyzése a bejegyzésbe mentődik; követőnél null (csak olvasás) */
+ onNoteSave, /* v15: a Legutóbbi vércukor kártya megjegyzése a bejegyzésbe mentődik; követőnél null (csak olvasás) */
+ onQuickSleep /* v20.6 (Feladat 2, Zoltán kérésére): egy koppintásos Alvás-napló (Lefekvés/Ébredés); követőnél null */
 }) {
  const [editingNote, setEditingNote] = useState(false);
  const [noteInput, setNoteInput] = useState('');
@@ -4378,6 +4420,8 @@ function Dashboard({
  /* v20 (feladat 4): bázisinzulin (Lantus stb.) aktív mennyisége — kizárólag
     tájékoztató jelleggel, l. calcBasalIOB megjegyzését. */
  const basalIob = useMemo(() => calcBasalIOB(entries, settings && settings.basalName), [entries, settings]);
+ /* v20.6 (Feladat 2, Zoltán kérésére): legutóbbi Alvás-esemény/időtartam — l. lastSleepInfo megjegyzését. */
+ const sleepInfo = useMemo(() => lastSleepInfo(entries), [entries]);
 
  /* v15: a megjegyzés NEM különálló localStorage-szöveg többé, hanem a legutóbbi
     vércukor-bejegyzés "notes" mezője — így a Mai bejegyzéseknél is látszik/szerkeszthető,
@@ -4561,16 +4605,16 @@ function Dashboard({
     },
     h('p', {
      className: 'text-xs font-bold text-indigo-400 mb-1'
-    }, (settings && settings.streakTitle) || STREAK_DEFAULTS.title),
+    }, window.t((settings && settings.streakTitle) || STREAK_DEFAULTS.title)),
     h('p', {
       className: 'text-3xl font-black text-indigo-700'
      }, streak,
      h('span', {
       className: 'text-sm ml-2 font-bold text-indigo-400'
-     }, (settings && settings.streakSuffix) || STREAK_DEFAULTS.suffix)),
+     }, window.t((settings && settings.streakSuffix) || STREAK_DEFAULTS.suffix))),
     streak >= 3 && h('p', {
      className: 'text-xs text-indigo-400 mt-1'
-    }, (settings && settings.streakMsg) || STREAK_DEFAULTS.msg)
+    }, window.t((settings && settings.streakMsg) || STREAK_DEFAULTS.msg))
    ),
    h('div', {
      className: 'rounded-2xl shadow p-4 bg-white border-2 border-indigo-100'
@@ -4780,7 +4824,7 @@ function Dashboard({
      }, window.bgU.label())),
      h('p', {
       className: 'text-xs opacity-70 mt-1'
-     }, fmtAlwaysDT(latestBG.timestamp) + (latestBG.type ? ` – ${latestBG.type}` : '')),
+     }, fmtAlwaysDT(latestBG.timestamp) + (latestBG.type ? ` – ${window.t(latestBG.type)}` : '')),
      // Megjegyzés
      h('div', {
        className: 'mt-3'
@@ -4829,6 +4873,43 @@ function Dashboard({
     h('div', {
      className: 'text-6xl ml-4'
     }, bgIcon(latestVal))
+   )
+  ),
+
+  /* v20.6 (Feladat 2, Zoltán kérésére): Alvás gyorsgomb + Áttekintés-csempe —
+     SZÁNDÉKOSAN itt, a vércukor/inzulin/CH csempék UTÁN, alacsonyabb
+     priorítással, mint kérte. Egy koppintás = azonnali rögzítés (jelenlegi
+     idővel, űrlap nélkül); a pontos idő utólag az EditModal Alvás-ágában
+     javítható (l. onEdit → EditModal, entry.type === 'Alvás'). Követő módban
+     (onQuickSleep null) csak az utolsó állapot látszik, gombok nélkül. */
+  (onQuickSleep || sleepInfo) && h('div', {
+    className: 'rounded-2xl bg-teal-50 border-2 border-teal-200 shadow-sm p-4'
+   },
+   h('div', {
+     className: 'flex items-center justify-between mb-2 gap-2 flex-wrap'
+    },
+    h('p', {
+     className: 'text-sm font-bold text-teal-700'
+    }, '😴 ' + window.t('Alvás')),
+    sleepInfo && h('p', {
+     className: 'text-xs text-teal-600 font-semibold'
+    }, sleepInfo.durationMin != null ?
+    window.t('Elalvás') + ': ' + fmtDur(sleepInfo.durationMin) + ' (' + fmtTime(sleepInfo.prev.timestamp) + '–' + fmtTime(sleepInfo.last.timestamp) + ')' :
+    window.t('Utolsó') + ': ' + (sleepInfo.last.sleepEvent === 'ebredes' ? '☀️ ' + window.t('Ébredés') : '🛌 ' + window.t('Lefekvés')) + ' · ' + fmtAlwaysDT(sleepInfo.last.timestamp))
+   ),
+   onQuickSleep && h('div', {
+     className: 'flex gap-2'
+    },
+    h('button', {
+     type: 'button',
+     onClick: () => onQuickSleep('lefekves'),
+     className: 'flex-1 py-2 rounded-xl text-sm font-bold bg-teal-100 text-teal-700 hbc-hover-bg-teal-200'
+    }, '🛌 ' + window.t('Lefekvés')),
+    h('button', {
+     type: 'button',
+     onClick: () => onQuickSleep('ebredes'),
+     className: 'flex-1 py-2 rounded-xl text-sm font-bold bg-teal-100 text-teal-700 hbc-hover-bg-teal-200'
+    }, '☀️ ' + window.t('Ébredés'))
    )
   ),
 
@@ -5287,7 +5368,9 @@ function EntriesList({
  onEdit,
  onDelete,
  onView, /* v19.1: Tulajdonos módban is elérhető csak-olvasó "szem" nézet */
- settings
+ settings,
+ onReportFilterChange /* v20.6 (Feladat 3, Zoltán kérésére): a strukturált szűrő állapotát az App-szintre
+    juttatja, hogy a Statisztika oldal Orvosi riportja tudja, mit adjon hozzá — l. lent, "Hozzáadás a Riporthoz" */
 }) {
  const [mode, setMode] = useState('day');
  const [selDate, setSelDate] = useState(todayStr());
@@ -5297,6 +5380,17 @@ function EntriesList({
  const [actF, setActF] = useState('all'); /* v14: tevékenységnév-szűrő */
  const [q, setQ] = useState(''); /* v18 (6.7): szabad szavas keresés */
  const searchOn = !settings || settings.featSearch !== false;
+ /* v20.6 (Feladat 3, Zoltán kérésére): ÚJ strukturált szűrők — orvosi célra:
+    spontán, tanítás nélkül használható, koppintható szűrők a meglévő Típus-
+    szűrő mellett. */
+ const [showFilters, setShowFilters] = useState(false);
+ const [actLvlMin, setActLvlMin] = useState(0); /* 0 = kikapcsolva, 1-5 = "legalább ennyi" */
+ const [foodMode, setFoodMode] = useState('all'); /* 'all' | 'g' | 'ml' | 'count' */
+ const [bgRange, setBgRange] = useState('all'); /* 'all' | 'low' | 'target' | 'high' */
+ const [reportFilterOn, setReportFilterOn] = useState(false);
+ /* v20.6 (Feladat 3, Zoltán kérésére): gépelésre feljövő találati lista a
+    kereséshez — a korábbi étel- és tevékenységnevek közt. */
+ const [showSuggest, setShowSuggest] = useState(false);
 
  const {
   f,
@@ -5309,13 +5403,42 @@ function EntriesList({
   t: toD
  };
  const actNames = useMemo(() => activityNames(entries), [entries]); /* v14 */
+ /* v20.6 (Feladat 3, Zoltán kérésére): a keresési javaslatlista forrása — az
+    összes eddig rögzített étel- és tevékenységnév, plusz az étkezés-típusok
+    (Reggeli, Ebéd stb.) és az Alvás-események (Lefekvés/Ébredés) fordított neve.
+    A sima substring-keresés (lásd lent) enélkül is megtalálja pl. "rudi"
+    beírására a "Túrórudi"-t — ez a lista csak a felkínált javaslatokhoz kell. */
+ const searchPool = useMemo(() => {
+  const set = new Set();
+  (entries || []).forEach(e => {
+   if (Array.isArray(e.foods)) e.foods.forEach(fd => {
+    if (fd && fd.name && String(fd.name).trim()) set.add(String(fd.name).trim());
+   });
+   if (e.activity) String(e.activity).split(',').forEach(n => {
+    const v = n.trim();
+    if (v) set.add(v);
+   });
+   if (e.mealType) set.add(window.t(e.mealType));
+   if (e.sleepEvent) set.add(window.t(e.sleepEvent === 'ebredes' ? 'Ébredés' : 'Lefekvés'));
+  });
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'hu'));
+ }, [entries]);
+ const suggestions = useMemo(() => {
+  const qq = q.trim().toLowerCase();
+  if (!qq) return [];
+  return searchPool.filter(n => n.toLowerCase().includes(qq)).slice(0, 8);
+ }, [q, searchPool]);
  const filtered = useMemo(() => {
   /* v18 (6.7): kereséskor a TELJES naplóban keresünk (dátumszűrő nélkül),
      hogy a korábbi hasonló étkezések tapasztalata is előkerüljön (pl. „pizza") */
   const _q = searchOn ? q.trim().toLowerCase() : '';
   let arr = _q ? sortedByTS(entries.slice()).reverse() : sortedByTS(filterRange(entries, f, t)).reverse();
   if (_q) arr = arr.filter(e => {
+   /* v20.6 (Feladat 3, Zoltán kérésére): az Alvás-események (Lefekvés/Ébredés)
+      fordított neve is bekerül a keresési szövegbe, hogy pl. "ébredés" beírására
+      is előkerüljenek — eddig csak az "alvás" típusnév szerint voltak találhatók. */
    const hay = [e.notes, e.type, e.mealType, e.activity,
+    e.sleepEvent && window.t(e.sleepEvent === 'ebredes' ? 'Ébredés' : 'Lefekvés'),
     ...((e.foods || []).map(x => x && x.name))
    ].filter(Boolean).join(' ').toLowerCase();
    return hay.includes(_q);
@@ -5330,8 +5453,51 @@ function EntriesList({
    /* v14: további szűrés a tevékenység NEVÉRE */
    if (actF !== 'all') arr = arr.filter(e => String(e.activity || '').split(',').map(x => x.trim()).includes(actF));
   } else if (typeF !== 'all') arr = arr.filter(e => e.type === typeF);
+  /* v20.6 (Feladat 3, Zoltán kérésére): ÚJ strukturált szűrők */
+  if (actLvlMin > 0) arr = arr.filter(e => (parseInt(e.activityLevel) || 0) >= actLvlMin);
+  if (foodMode !== 'all') arr = arr.filter(e => Array.isArray(e.foods) && e.foods.some(fd => (fd && (fd.unitKind || 'g')) === foodMode));
+  if (bgRange !== 'all') {
+   const _low = settings && settings.lowBG != null ? settings.lowBG : 3.9;
+   const _high = settings && settings.highBG != null ? settings.highBG : 10.0;
+   arr = arr.filter(e => {
+    if (e.bloodGlucose == null || e.bloodGlucose === '') return false;
+    const bgv = parseFloat(e.bloodGlucose);
+    if (bgRange === 'low') return bgv < _low;
+    if (bgRange === 'high') return bgv > _high;
+    return bgv >= _low && bgv <= _high; /* 'target' */
+   });
+  }
   return arr;
- }, [entries, f, t, typeF, actF, q, searchOn]);
+ }, [entries, f, t, typeF, actF, q, searchOn, actLvlMin, foodMode, bgRange, settings]);
+
+ /* v20.6 (Feladat 3, Zoltán kérésére): a szűrők szöveges összefoglalója — ez
+    kerül a riport kiegészítő szakaszának címébe, ha a "Hozzáadás a Riporthoz"
+    kapcsoló be van kapcsolva. */
+ const filterDescription = () => {
+  const parts = [];
+  if (typeF === 'Egyéb tevékenység' && actF !== 'all') parts.push(window.t('Tevékenység') + ': ' + actF);
+  else if (typeF !== 'all') parts.push(window.t('Típus') + ': ' + window.t(typeF));
+  if (actLvlMin > 0) parts.push(window.t('Fizikai aktivitás') + ' ≥ ' + actLvlMin + '/5');
+  if (foodMode !== 'all') parts.push(window.t('Étel/folyadék mód') + ': ' +
+   (foodMode === 'g' ? window.t('Szilárd (g)') : foodMode === 'ml' ? window.t('Folyadék (ml)') : window.t('Darab (db)')));
+  if (bgRange !== 'all') parts.push(window.t('Vércukor-tartomány') + ': ' +
+   (bgRange === 'low' ? window.t('Alacsony') : bgRange === 'high' ? window.t('Magas') : window.t('Cél')));
+  if (searchOn && q.trim()) parts.push(window.t('Keresés') + ': "' + q.trim() + '"');
+  return parts.length ? parts.join(' · ') : window.t('Összes bejegyzés');
+ };
+ /* v20.6: a szűrt bejegyzés-ID-k + leírás App-szintre juttatása, amíg a kapcsoló be van kapcsolva */
+ useEffect(() => {
+  if (!onReportFilterChange) return;
+  if (reportFilterOn) {
+   onReportFilterChange({
+    description: filterDescription(),
+    entryIds: filtered.map(e => e.id)
+   });
+  } else {
+   onReportFilterChange(null);
+  }
+  /* eslint-disable-next-line react-hooks/exhaustive-deps */
+ }, [reportFilterOn, filtered, onReportFilterChange]);
 
  return h('div', {
    className: 'space-y-4'
@@ -5369,7 +5535,10 @@ function EntriesList({
      }, '💉 ' + ((settings && settings.basalName) || 'Lantus')), /* v13: a beállított bázisnév */
      h('option', {
       value: 'Egyéb tevékenység'
-     }, '🏃 Egyéb tevékenység')
+     }, '🏃 Egyéb tevékenység'),
+     h('option', {
+      value: 'Alvás'
+     }, '😴 ' + window.t('Alvás')) /* v20.6 (Feladat 2, Zoltán kérésére) */
     )
    ),
    /* v14: az Egyéb tevékenység szűrő TOVÁBBI szűrése a tevékenység nevére */
@@ -5392,6 +5561,94 @@ function EntriesList({
       value: n
      }, n))
     )
+   ),
+   /* ═══ v20.6 (Feladat 3, Zoltán kérésére): STRUKTURÁLT SZŰRŐ-PANEL — orvosi
+      célra: spontán, tanítás nélkül, a telefont átvéve is használható legyen.
+      Alapból összecsukva (napi használatra nem torlódik a felület), de jól
+      látható gombbal nyitható. ═══ */
+   h('div', {
+     className: 'mb-3'
+    },
+    h('button', {
+     type: 'button',
+     onClick: () => setShowFilters(v => !v),
+     className: `px-3 py-2 rounded-xl text-xs font-bold ${showFilters?'ta':'ti'}`
+    }, '🔍 ' + window.t('Részletes szűrés') + (showFilters ? ' ▲' : ' ▼'))
+   ),
+   showFilters && h('div', {
+     className: 'mb-3 p-3 rounded-xl bg-indigo-50 border-2 border-indigo-100 space-y-3'
+    },
+    h('div', null,
+     h('label', {
+      className: 'text-xs font-bold text-gray-600 block mb-1'
+     }, '⚡ ' + window.t('Fizikai aktivitás (legalább)')),
+     h('div', {
+       className: 'flex gap-1'
+      },
+      [0, 1, 2, 3, 4, 5].map(n => h('button', {
+       key: n,
+       type: 'button',
+       onClick: () => setActLvlMin(n),
+       className: `flex-1 py-1.5 rounded-lg text-xs font-bold ${actLvlMin===n?'ta':'ti'}`
+      }, n === 0 ? window.t('Mind') : String(n)))
+     )
+    ),
+    h('div', null,
+     h('label', {
+      className: 'text-xs font-bold text-gray-600 block mb-1'
+     }, '🥣 ' + window.t('Étel/folyadék mód')),
+     h('div', {
+       className: 'flex gap-1'
+      },
+      [
+       ['all', window.t('Mind')],
+       ['g', '⚖️ ' + window.t('Szilárd (g)')],
+       ['ml', '🥤 ' + window.t('Folyadék (ml)')],
+       ['count', '#️⃣ ' + window.t('Darab (db)')]
+      ].map(([v, label]) => h('button', {
+       key: v,
+       type: 'button',
+       onClick: () => setFoodMode(v),
+       className: `flex-1 py-1.5 rounded-lg text-[11px] font-bold ${foodMode===v?'ta':'ti'}`
+      }, label))
+     )
+    ),
+    h('div', null,
+     h('label', {
+      className: 'text-xs font-bold text-gray-600 block mb-1'
+     }, '🩸 ' + window.t('Vércukor-tartomány')),
+     h('div', {
+       className: 'flex gap-1'
+      },
+      [
+       ['all', window.t('Mind')],
+       ['low', '🟡 ' + window.t('Alacsony')],
+       ['target', '🟢 ' + window.t('Cél')],
+       ['high', '🔴 ' + window.t('Magas')]
+      ].map(([v, label]) => h('button', {
+       key: v,
+       type: 'button',
+       onClick: () => setBgRange(v),
+       className: `flex-1 py-1.5 rounded-lg text-[11px] font-bold ${bgRange===v?'ta':'ti'}`
+      }, label))
+     )
+    ),
+    /* v20.6 (Feladat 3, Zoltán kérésére): "Hozzáadás a Riporthoz" — a teljes
+       időszak riportja VÁLTOZATLAN marad, csak egy kiegészítő szakasz kerül a
+       végére a jelenleg szűrt bejegyzésekről (l. Statistics/buildReportPdf). */
+    onReportFilterChange && h('label', {
+      className: 'flex items-center gap-2 text-xs font-bold text-indigo-700 pt-1 border-t border-indigo-200'
+     },
+     h('input', {
+      type: 'checkbox',
+      checked: reportFilterOn,
+      onChange: e => setReportFilterOn(e.target.checked),
+      className: 'w-4 h-4'
+     }),
+     '📋 ' + window.t('Hozzáadás a szűrt nézet az Orvosi riporthoz')),
+    reportFilterOn && h('p', {
+     className: 'text-[11px] text-indigo-500'
+    }, filterDescription() + ' — ' + filtered.length + ' ' + window.t('bejegyzés'))
    ),
    mode === 'day' && h('div', {
      className: 'flex items-center gap-3 mb-3'
@@ -5433,17 +5690,40 @@ function EntriesList({
      className: 'border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
     }))
    ),
-   /* ═══ v18 (6.7): SZABAD SZAVAS KERESÉS A NAPLÓBAN ═══ */
+   /* ═══ v18 (6.7): SZABAD SZAVAS KERESÉS A NAPLÓBAN ═══
+      v20.6 (Feladat 3, Zoltán kérésére): gépelés közben feljövő találati
+      lista a korábbi étel-/tevékenységnevek közül (pl. "rudi" → "Túrórudi") —
+      a lista csak javaslat, a keresés maga továbbra is bármilyen beírt
+      szövegrészre (jegyzetre, típusra stb.) is talál. */
    searchOn && h('div', {
-     className: 'mb-3'
+     className: 'mb-3 relative'
     },
     h('input', {
      type: 'text',
      value: q,
-     onChange: e => setQ(e.target.value),
+     onChange: e => {
+      setQ(e.target.value);
+      setShowSuggest(true);
+     },
+     onFocus: () => setShowSuggest(true),
+     onBlur: () => setTimeout(() => setShowSuggest(false), 150), /* késleltetés, hogy a javaslatra kattintás lefusson */
      placeholder: '🔍 ' + window.t('Keresés a naplóban (pl. pizza, séta, reggeli)...'),
      className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
     }),
+    showSuggest && suggestions.length > 0 && h('div', {
+      className: 'absolute z-40 left-0 right-0 mt-1 bg-white border-2 border-indigo-200 rounded-xl shadow-lg overflow-hidden'
+     },
+     suggestions.map(n => h('button', {
+      type: 'button',
+      key: n,
+      onMouseDown: e => e.preventDefault(), /* hogy a blur ne előzze meg a kattintást */
+      onClick: () => {
+       setQ(n);
+       setShowSuggest(false);
+      },
+      className: 'w-full text-left px-3 py-2 text-sm font-semibold text-indigo-800 hbc-hover-bg-indigo-100'
+     }, '🔍 ' + n))
+    ),
     q.trim() && h('p', {
      className: 'text-[11px] text-indigo-400 mt-1 font-semibold'
     }, window.t('A keresés a teljes naplóban fut, a fenti dátumszűrőtől függetlenül.'))),
@@ -5481,7 +5761,7 @@ function EntriesList({
 // ═══════════ v8: ORVOSI RIPORT (nyomtatható / PDF) ═══════════
 /* v15: mode==='email' → nem nyit ablakot, hanem visszaadja a riport HTML-jét
    (cid: képhivatkozásokkal) + a grafikon-képeket az e-mail összeállításához. */
-function generateDoctorReport(entries, settings, f, t, mode) {
+function generateDoctorReport(entries, settings, f, t, mode, reportFilter) {
  const email = mode === 'email';
  const lang = window.HBC_I18N.getLang();
  const hu = lang !== 'en';
@@ -5651,13 +5931,35 @@ function generateDoctorReport(entries, settings, f, t, mode) {
 
  const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
  const fmtD = s => new Date(s + 'T00:00:00').toLocaleDateString(window.HBC_LOCALE());
- const rows = es.map(e => `<tr>
+ /* v20.6 (Feladat 3, Zoltán kérésére): a napló-táblázat egy sorának HTML-je —
+    kiemelve, hogy a "Hozzáadás a Riporthoz" kiegészítő szakasza is ugyanezt
+    a sorformátumot használja (l. lent, filteredRowsHtml). */
+ const rowHtml = e => `<tr>
     <td>${esc(fmtAlwaysDT(e.timestamp))}</td><td>${esc(window.t(e.type||''))}${e.mealType?' – '+esc(window.t(e.mealType)):''}</td>
     <td class="num">${e.bloodGlucose?esc(D(e.bloodGlucose))+(e.bloodGlucoseTime&&e.bloodGlucoseTime!==e.timestamp?' ('+esc(fmtTime(e.bloodGlucoseTime))+')':''):''}</td>
     <td class="num">${e.carbs?fmtCH(e.carbs):''}</td>
     <td class="num">${e.insulinRapid?esc(e.insulinRapid)+(e.insulinRapidTime&&e.insulinRapidTime!==e.timestamp?' ('+esc(fmtTime(e.insulinRapidTime))+')':''):''}</td>
     <td class="num">${e.insulinLong?esc(e.insulinLong)+(e.insulinLongTime&&e.insulinLongTime!==e.timestamp?' ('+esc(fmtTime(e.insulinLongTime))+')':''):''}</td>
-    <td class="notes">${esc(e.notes||'')}</td></tr>`).join('');
+    <td class="notes">${esc(e.notes||'')}</td></tr>`;
+ const rows = es.map(rowHtml).join('');
+ /* v20.6 (Feladat 3, Zoltán kérésére): "Hozzáadás a Riporthoz" — a Bejegyzések
+    oldalon aktivált szűrt nézet, KIEGÉSZÍTŐ szakaszként (a teljes időszak fenti
+    adatai VÁLTOZATLANOK maradnak). A szűrt bejegyzések a TELJES naplóból jönnek
+    (nem csak a riport dátumtartományából), hiszen a szűrés célja épp az, hogy a
+    dátumtartománytól függetlenül rákereshessen az orvos egy mintázatra. */
+ const filteredEs = (reportFilter && Array.isArray(reportFilter.entryIds)) ?
+  sortedByTS(entries.filter(e => reportFilter.entryIds.includes(e.id))) : [];
+ const filteredRowsHtml = filteredEs.map(rowHtml).join('');
+ /* v20.6: ugyanaz a sor-adat, tömb alakban — a pdfmake-alapú (email) PDF-hez */
+ const rowArr = e => [
+  fmtAlwaysDT(e.timestamp),
+  (window.t(e.type || '')) + (e.mealType ? ' – ' + window.t(e.mealType) : ''),
+  e.bloodGlucose ? String(D(e.bloodGlucose)) + (e.bloodGlucoseTime && e.bloodGlucoseTime !== e.timestamp ? ' (' + fmtTime(e.bloodGlucoseTime) + ')' : '') : '',
+  e.carbs ? fmtCH(e.carbs) : '',
+  e.insulinRapid ? String(e.insulinRapid) + (e.insulinRapidTime && e.insulinRapidTime !== e.timestamp ? ' (' + fmtTime(e.insulinRapidTime) + ')' : '') : '',
+  e.insulinLong ? String(e.insulinLong) + (e.insulinLongTime && e.insulinLongTime !== e.timestamp ? ' (' + fmtTime(e.insulinLongTime) + ')' : '') : '',
+  e.notes || ''
+ ];
 
  const stat = (l, v) => `<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div></div>`;
  /* v15: hivatalos levél-bevezető az e-mailes riporthoz */
@@ -5743,6 +6045,10 @@ ${patImg?`<h2>${R('Napi mintázat (óránkénti átlag)','Daily pattern (hourly 
 ${(dawnDawnN+dawnSomogyiN)>0?`<h2>${R('Hajnali jelenség / Somogyi-hatás (tájékoztató)','Dawn phenomenon / Somogyi effect (informational)')}</h2>
 <p style="font-size:10px;margin:0 0 4px">${R(`A kiválasztott időszakban ${dawnDawnN+dawnSomogyiN} alkalommal mutatott a napló hajnali (${esc(dawnStartR)}–${esc(dawnEndR)}), CH-bevitel/gyors inzulin nélküli, figyelemre méltó vércukor-emelkedést: ${dawnDawnN} esetben hajnali jelenség-gyanús, ${dawnSomogyiN} esetben Somogyi-hatás-gyanús mintázattal (utóbbinál a rögzített napló szerint alacsony vércukor előzte meg az emelkedést).`,`In the selected period the diary showed ${dawnDawnN+dawnSomogyiN} notable dawn-window (${esc(dawnStartR)}–${esc(dawnEndR)}) blood glucose rises without recorded carb intake/rapid insulin: ${dawnDawnN} with a pattern suggestive of dawn phenomenon, ${dawnSomogyiN} suggestive of the Somogyi effect (the latter preceded by a recorded low glucose reading).`)}</p>
 <p style="font-size:9.5px;color:#6b7280;margin:0 0 4px">${R('Ez kizárólag a naplóbejegyzések mintafelismerése, nem diagnózis és nem automatikus dózisjavaslat — a hajnali jelenség és a Somogyi-hatás kezelése eltérő lehet, a végső döntést mindig a kezelőorvos hozza meg.','This is a pattern detection over diary entries only — not a diagnosis and not an automatic dosing suggestion. Managing dawn phenomenon vs. the Somogyi effect can differ; the treating physician always makes the final decision.')}</p>`:''}
+${filteredEs.length>0?`<h2>${R('Kiegészítés — szűrt nézet','Supplement — filtered view')}: ${esc(reportFilter.description)} (${filteredEs.length})</h2>
+<p style="font-size:9.5px;color:#6b7280;margin:0 0 4px">${R('A Bejegyzések oldalon aktivált szűrés eredménye — a fenti teljes időszaki adatoktól függetlenül, a TELJES naplóból.','Result of the filter activated on the Entries page — independent of the full-period figures above, drawn from the ENTIRE diary.')}</p>
+<table><thead><tr><th>${R('Időpont','Time')}</th><th>${R('Típus','Type')}</th><th>${R('VC','BG')} (${UL})</th><th>CH (g)</th><th>${esc(rapidN)} (E)</th><th>${esc(basalN)} (E)</th><th>${R('Megjegyzés','Notes')}</th></tr></thead>
+<tbody>${filteredRowsHtml}</tbody></table>`:''}
 <div class="warn">⚠️ ${R('Ez a riport a felhasználó saját naplóbejegyzésein alapuló becsléseket tartalmaz (HbA1c, GMI, TIR). Nem laboreredmény és nem orvostechnikai eszköz — a terápiás döntéseket mindig a kezelőorvos hozza meg!','This report contains estimates (HbA1c, GMI, TIR) based on diary entries recorded by the user. It is not a laboratory result and not a medical device — treatment decisions must always be made by the treating physician!')}</div>
 <div class="foot"><span>${R('HBC Diabétesz Napló','HBC Diabetes Diary')} v${APP_VERSION} Type 1 Diabetes APP</span><span>${R('Oldal','Page')}: <span class="pg"></span></span></div>
 ${email?'':'<scr'+'ipt>setTimeout(function(){window.print();},400);</scr'+'ipt>'}
@@ -5792,15 +6098,11 @@ ${email?'':'<scr'+'ipt>setTimeout(function(){window.print();},400);</scr'+'ipt>'
    dawnStart: dawnStartR,
    dawnEnd: dawnEndR,
    generated: new Date().toLocaleString(window.HBC_LOCALE()),
-   rows: es.map(e => [
-    fmtAlwaysDT(e.timestamp),
-    (window.t(e.type || '')) + (e.mealType ? ' – ' + window.t(e.mealType) : ''),
-    e.bloodGlucose ? String(D(e.bloodGlucose)) + (e.bloodGlucoseTime && e.bloodGlucoseTime !== e.timestamp ? ' (' + fmtTime(e.bloodGlucoseTime) + ')' : '') : '',
-    e.carbs ? fmtCH(e.carbs) : '',
-    e.insulinRapid ? String(e.insulinRapid) + (e.insulinRapidTime && e.insulinRapidTime !== e.timestamp ? ' (' + fmtTime(e.insulinRapidTime) + ')' : '') : '',
-    e.insulinLong ? String(e.insulinLong) + (e.insulinLongTime && e.insulinLongTime !== e.timestamp ? ' (' + fmtTime(e.insulinLongTime) + ')' : '') : '',
-    e.notes || ''
-   ])
+   rows: es.map(rowArr),
+   /* v20.6 (Feladat 3, Zoltán kérésére): "Hozzáadás a Riporthoz" kiegészítő
+      szakasz adatai a pdfmake-alapú PDF-csatolmányhoz — l. buildReportPdf. */
+   filterDescription: filteredEs.length > 0 ? reportFilter.description : '',
+   filterRows: filteredEs.map(rowArr)
   }
  };
  const win = window.open('', '_blank');
@@ -5912,6 +6214,16 @@ function buildReportPdf(rep, logoB64) {
   fillColor: '#eef2ff'
  }));
  const tblRows = d.rows.map((r, i) => r.map((c, ci) => ({
+  text: c,
+  fontSize: 7.5,
+  color: ci === 6 ? GRAY : '#1f2937',
+  italics: ci === 6,
+  alignment: (ci >= 2 && ci <= 5) ? 'right' : 'left',
+  fillColor: i % 2 ? '#fafbff' : null
+ })));
+ /* v20.6 (Feladat 3, Zoltán kérésére): "Hozzáadás a Riporthoz" kiegészítő
+    szakasz sorai — ugyanaz a formázás, mint a fő táblázaté. */
+ const tblFilteredRows = (d.filterRows || []).map((r, i) => r.map((c, ci) => ({
   text: c,
   fontSize: 7.5,
   color: ci === 6 ? GRAY : '#1f2937',
@@ -6044,6 +6356,31 @@ function buildReportPdf(rep, logoB64) {
      color: GRAY,
      margin: [0, 0, 0, 4]
     }
+   ] : []),
+   /* v20.6 (Feladat 3, Zoltán kérésére): "Hozzáadás a Riporthoz" — kiegészítő
+      szakasz a Bejegyzések oldalon aktivált szűrt nézetről; a fenti teljes
+      időszaki adatok VÁLTOZATLANOK maradnak. */
+   ...((d.filterRows && d.filterRows.length > 0) ? [
+    h2(R('Kiegészítés — szűrt nézet', 'Supplement — filtered view') + `: ${d.filterDescription} (${d.filterRows.length})`),
+    {
+     text: R('A Bejegyzések oldalon aktivált szűrés eredménye — a fenti teljes időszaki adatoktól függetlenül, a TELJES naplóból.', 'Result of the filter activated on the Entries page — independent of the full-period figures above, drawn from the ENTIRE diary.'),
+     fontSize: 7.5,
+     color: GRAY,
+     margin: [0, 0, 0, 4]
+    },
+    {
+     table: {
+      headerRows: 1,
+      widths: [78, 72, 38, 30, 52, 52, '*'],
+      body: [tblHeader, ...tblFilteredRows]
+     },
+     layout: {
+      hLineColor: () => '#e0e7ff',
+      vLineColor: () => '#eef2ff',
+      hLineWidth: i => i <= 1 ? 1.4 : 0.6,
+      vLineWidth: () => 0.6
+     }
+    }
    ] : []), {
     table: {
      widths: ['*'],
@@ -6079,9 +6416,9 @@ function buildReportPdf(rep, logoB64) {
  });
 }
 
-async function sendDoctorReportEmail(entries, settings, f, t, toAddr) {
+async function sendDoctorReportEmail(entries, settings, f, t, toAddr, reportFilter) {
  const hu = window.HBC_I18N.getLang() !== 'en';
- const rep = generateDoctorReport(entries, settings, f, t, 'email');
+ const rep = generateDoctorReport(entries, settings, f, t, 'email', reportFilter);
  /* logó beolvasása base64-ként (ha nem érhető el, a riport logó nélkül megy) */
  let logoB64 = '';
  try {
@@ -6129,7 +6466,8 @@ function Statistics({
  settings,
  docEmails,
  onSaveDocEmails,
- onSaveActCfg
+ onSaveActCfg,
+ reportFilter /* v20.6 (Feladat 3, Zoltán kérésére): { description, entryIds } vagy null — l. EntriesList */
 }) {
  const [mode, setMode] = useState('7');
  const [fromD, setFromD] = useState(subD(7));
@@ -6163,6 +6501,9 @@ function Statistics({
     analyzeDawnPattern megjegyzését. A TELJES naplón fut (nem csak a kiválasztott
     időszakon), hogy a visszatekintő minta ne függjön az aktuális szűréstől. */
  const dawn = useMemo(() => analyzeDawnPattern(entries, settings), [entries, settings]);
+ /* v20.5 (feladat 1, Zoltán kérésére): a "hajnali jelenség-gyanú" / "Somogyi-gyanú"
+    csempére koppintva megjelenő rövid magyarázat — melyik van nyitva (null/'dawn'/'somogyi'). */
+ const [dawnExplain, setDawnExplain] = useState(null);
  const patR = useRef(null);
  const patC = useRef(null);
  /* v18: AGP percentilis grafikon (6.2) */
@@ -6187,7 +6528,7 @@ function Statistics({
   if (!validMail || sending) return;
   setSending(true);
   setSendMsg(null);
-  sendDoctorReportEmail(entries, settings, repF, repT, addr).then(() => {
+  sendDoctorReportEmail(entries, settings, repF, repT, addr, reportFilter).then(() => {
    setSending(false);
    setSendMsg({
     ok: true,
@@ -6675,7 +7016,10 @@ function Statistics({
      className: 'grid grid-cols-2 gap-3 mb-2'
     },
     h('div', {
-      className: 'p-3 rounded-xl bg-amber-50 border-2 border-amber-200 text-center'
+      className: 'p-3 rounded-xl bg-amber-50 border-2 border-amber-200 text-center hbc-cursor-pointer',
+      role: 'button',
+      tabIndex: 0,
+      onClick: () => setDawnExplain(dawnExplain === 'dawn' ? null : 'dawn')
      },
      h('p', {
       className: 'text-2xl font-black text-amber-700'
@@ -6685,7 +7029,10 @@ function Statistics({
      }, '🌅 ' + window.t('hajnali jelenség-gyanú'))
     ),
     h('div', {
-      className: 'p-3 rounded-xl bg-rose-50 border-2 border-rose-200 text-center'
+      className: 'p-3 rounded-xl bg-rose-50 border-2 border-rose-200 text-center hbc-cursor-pointer',
+      role: 'button',
+      tabIndex: 0,
+      onClick: () => setDawnExplain(dawnExplain === 'somogyi' ? null : 'somogyi')
      },
      h('p', {
       className: 'text-2xl font-black text-rose-700'
@@ -6693,6 +7040,25 @@ function Statistics({
      h('p', {
       className: 'text-xs font-bold text-rose-700'
      }, '📉 ' + window.t('Somogyi-gyanú'))
+    )
+   ),
+   /* v20.5 (feladat 1, Zoltán kérésére): a fenti két csempére koppintva megjelenő
+      rövid magyarázat (kézikönyv 7. old. szószedete alapján). Egy láthatatlan,
+      teljes képernyős réteg zárja be, ha bárhova máshova koppintanak. */
+   dawnExplain && h(Fragment, null,
+    h('div', {
+     className: 'fixed inset-0 z-[100]',
+     onClick: () => setDawnExplain(null)
+    }),
+    h('div', {
+      className: 'relative z-[110] p-3 rounded-xl border-2 mb-2 text-sm text-gray-700 ' + (dawnExplain === 'dawn' ? 'bg-amber-50 border-amber-200' : 'bg-rose-50 border-rose-200')
+     },
+     h('p', {
+      className: 'font-bold mb-1 ' + (dawnExplain === 'dawn' ? 'text-amber-700' : 'text-rose-700')
+     }, dawnExplain === 'dawn' ? '🌅 ' + window.t('Hajnali jelenség') : '📉 ' + window.t('Somogyi-hatás')),
+     h('p', {}, dawnExplain === 'dawn' ?
+      window.t('Reggeli, jellemzően CH-bevitel és gyors inzulin nélküli vércukor-emelkedés, a szervezet hajnali hormonális folyamatai miatt. A napló automatikusan felismeri és jelzi — tájékoztató jelleggel, nem diagnózis.') :
+      window.t('A hajnali jelenséghez hasonló reggeli vércukor-emelkedés, amelyet éjszakai alacsony vércukor (hipoglikémia) előzött meg — a szervezet ellenszabályozó válasza. A napló ezt a hajnali jelenségtől elkülönítve jelzi.'))
     )
    ),
    dawn.events.length > 0 && h('div', {
@@ -6986,7 +7352,7 @@ function Statistics({
      },
      h('p', {
       className: 'text-sm font-black text-teal-800'
-     }, g.name + ` (${g.n} ${window.t('alkalom')}, átlag ${g.avgPct > 0 ? '+' : ''}${g.avgPct.toFixed(0)}%)`),
+     }, window.t(g.name) + ` (${g.n} ${window.t('alkalom')}, átlag ${g.avgPct > 0 ? '+' : ''}${g.avgPct.toFixed(0)}%)`),
      h('p', {
       className: 'text-xs text-teal-700 mt-1'
      }, window.t('Átlagos vércukor-elmozdulás a mérés után') + `: ${g.avgDelta > 0 ? '+' : ''}${g.avgDelta.toFixed(1)} ${window.bgU.label()}`),
@@ -7025,6 +7391,12 @@ function Statistics({
    h('p', {
     className: 'text-sm text-gray-500 mb-3'
    }, 'Nyomtatható összefoglaló a kezelőorvosnak: TIR, becsült HbA1c/GMI, grafikonok és részletes napló. A megnyíló oldalon a Nyomtatás gombbal PDF-be is mentheted.'),
+   /* v20.6 (Feladat 3, Zoltán kérésére): jól látható jelzés, ha a Bejegyzések
+      oldalon aktivált szűrt nézet bekerül a riportba — hogy ne érje meglepetés
+      a felhasználót */
+   reportFilter && h('p', {
+    className: 'text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 mb-3'
+   }, '📋 ' + window.t('A riport kiegészül a szűrt nézettel') + ': ' + reportFilter.description + ' (' + reportFilter.entryIds.length + ' ' + window.t('bejegyzés') + ')'),
    h('div', {
      className: 'flex gap-3 flex-wrap items-end'
     },
@@ -7142,7 +7514,7 @@ function Statistics({
       }, sending ? '⏳ ' + window.t('Küldés folyamatban') + '…' : '📧 ' + window.t('Küldés e-mailben')),
      h('button', {
        type: 'button',
-       onClick: () => generateDoctorReport(entries, settings, repF, repT),
+       onClick: () => generateDoctorReport(entries, settings, repF, repT, undefined, reportFilter),
        className: 'font-bold px-5 py-2.5 rounded-xl text-sm border-2 border-indigo-300 text-indigo-700 hbc-inline-flex items-center gap-2 hbc-min-h-44 bg-white'
       }, '🖨️ ' + window.t('PDF / Nyomtatás'))
     ),
@@ -8070,7 +8442,7 @@ function AddEntry({
        }),
        className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
       },
-      h('option', null, 'Étkezés'), h('option', null, 'Kontroll'), h('option', null, 'Lantus'), h('option', null, 'Egyéb tevékenység')))
+      h('option', { value: 'Étkezés' }, 'Étkezés'), h('option', { value: 'Kontroll' }, 'Kontroll'), h('option', { value: 'Lantus' }, 'Lantus'), h('option', { value: 'Egyéb tevékenység' }, 'Egyéb tevékenység')))
    ),
 
    form.type === 'Étkezés' && h('div', null,
@@ -8089,7 +8461,8 @@ function AddEntry({
       value: ''
      }, 'Válassz...'),
      ['Reggeli', 'Tízórai', 'Ebéd', 'Uzsonna', 'Vacsora', 'Utóvacsora'].map(m => h('option', {
-      key: m
+      key: m,
+      value: m
      }, m))
     )
    ),
@@ -8514,10 +8887,10 @@ function AddEntry({
      weatherErr && h('p', { className: 'text-xs text-red-500 mt-1' }, '⚠️ ' + window.t(weatherErr)),
      actProfile && actPct !== 0 && h('p', {
       className: 'text-xs font-bold text-purple-700 mt-2'
-     }, `${actPct > 0 ? '+' : ''}${actPct}% ${window.t('korrigálva')}: ${actProfile.name}` + (form.weatherTemp !== '' ? ` (${form.weatherTemp}°C)` : '')),
+     }, `${actPct > 0 ? '+' : ''}${actPct}% ${window.t('korrigálva')}: ${window.t(actProfile.name)}` + (form.weatherTemp !== '' ? ` (${form.weatherTemp}°C)` : '')),
      actProfile && actProfile.extraCH && h('p', {
       className: 'text-xs text-amber-700 mt-1 p-2 bg-amber-50 rounded-xl border border-amber-200'
-     }, '🍭 ' + window.t('Javasolt extra CH') + ': ' + actProfile.extraCH)
+     }, '🍭 ' + window.t('Javasolt extra CH') + ': ' + window.t(actProfile.extraCH))
     ),
     h('p', {
       className: 'text-lg font-black text-purple-900 mb-2'
@@ -8736,6 +9109,9 @@ function ViewEntryModal({
      },
      row('📝', 'Típus', window.t(entry.type || '')),
      entry.mealType && row('🍽️', 'Étkezés típusa', window.t(entry.mealType)),
+     /* v20.6 (Feladat 2, Zoltán kérésére): Alvás-esemény (Lefekvés/Ébredés) */
+     entry.type === 'Alvás' && entry.sleepEvent && row(entry.sleepEvent === 'ebredes' ? '☀️' : '🛌', 'Esemény',
+      window.t(entry.sleepEvent === 'ebredes' ? 'Ébredés' : 'Lefekvés')),
      row('⏰', 'Időpont', fmtAlwaysDT(entry.timestamp)),
      entry.bloodGlucose != null && entry.bloodGlucose !== '' && row('🩸', 'Vércukor', window.bgU.dispFixed(entry.bloodGlucose) + ' ' + window.bgU.label() +
      /* v18.7 (feladat 6–7): a mérés saját időpontja, ha eltér a bejegyzés fő idejétől */
@@ -8767,7 +9143,7 @@ function ViewEntryModal({
      entry.activityLevel > 0 && row('⚡', 'Fizikai aktivitás', entry.activityLevel + '/5 – ' + actLevelName(settings, entry.activityLevel)),
      /* v19: aktivitás/hőség profil — a mentéskor rögzített név/%/hőmérséklet */
      entry.activityProfileId && entry.activityProfilePct && row('🌡️', 'Aktivitás/hőség profil',
-      entry.activityProfileName + ' (' + (entry.activityProfilePct > 0 ? '+' : '') + entry.activityProfilePct + '%)' +
+      window.t(entry.activityProfileName) + ' (' + (entry.activityProfilePct > 0 ? '+' : '') + entry.activityProfilePct + '%)' +
       (entry.weatherTemp != null && entry.weatherTemp !== '' ? ' · ' + entry.weatherTemp + '°C' : '')),
      entry.notes && h('div', {
        className: 'py-2'
@@ -9132,6 +9508,134 @@ function EditModal({
   if (warn && showConfirm) showConfirm(warn, doSave);
   else doSave();
  };
+ /* ═══ v20.6 (Feladat 2, Zoltán kérésére): "Alvás" (Lefekvés/Ébredés) bejegyzés
+    UTÓLAGOS javítása — KÜLÖN, minimális felület, NEM az általános (vércukor/CH/
+    inzulin/aktivitás mezőket tartalmazó) form egyik ága. Az Alvás-bejegyzés
+    LÉTREHOZÁSA a gyorsgombbal (Áttekintés csempe) történik, form nélkül —
+    ide csak az időpont/esemény/jegyzet utólagos korrekciójához van szükség.
+    A típus itt szándékosan nem módosítható másra (törlés+újrafelvétel esetén). ═══ */
+ if (entry.type === 'Alvás') {
+  const saveSleep = e => {
+   e.preventDefault();
+   onSave({
+    ...entry,
+    timestamp: form.timestamp,
+    sleepEvent: form.sleepEvent,
+    notes: (form.notes || '').trim()
+   });
+  };
+  return h('div', {
+    className: 'fixed inset-0 bg-black/60 z-50',
+    style: {
+     overflowY: 'auto',
+     WebkitOverflowScrolling: 'touch'
+    }
+   },
+   h('div', {
+     style: {
+      minHeight: '100%',
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      padding: '16px',
+      paddingTop: 'calc(16px + env(safe-area-inset-top,0px))',
+      paddingBottom: 'calc(24px + env(safe-area-inset-bottom,0px))'
+     }
+    },
+    h('div', {
+      className: 'bg-white rounded-2xl shadow-2xl max-w-lg w-full'
+     },
+     h('div', {
+       className: 'flex items-center justify-between p-4 border-b'
+      },
+      h('h3', {
+       className: 'font-black text-gray-900'
+      }, (form.sleepEvent === 'ebredes' ? '☀️ ' : '🛌 ') + window.t('Bejegyzés szerkesztése')),
+      h('button', {
+       onClick: onCancel,
+       type: 'button',
+       className: 'text-gray-400 text-2xl'
+      }, '✖️')
+     ),
+     h('form', {
+       onSubmit: saveSleep,
+       className: 'p-4 space-y-3'
+      },
+      h('div', null,
+       h('label', {
+        className: 'text-sm font-bold text-gray-500 block mb-1'
+       }, '⏰ ' + window.t('Időpont (utólag is módosítható!)')),
+       h('input', {
+        type: 'datetime-local',
+        value: form.timestamp || '',
+        onChange: e => setForm(p => ({
+         ...p,
+         timestamp: e.target.value
+        })),
+        required: true,
+        className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
+       })
+      ),
+      h('div', null,
+       h('label', {
+        className: 'text-sm font-bold text-gray-500 block mb-1'
+       }, window.t('Esemény')),
+       h('div', {
+         className: 'flex gap-2'
+        },
+        h('button', {
+         type: 'button',
+         onClick: () => setForm(p => ({
+          ...p,
+          sleepEvent: 'lefekves'
+         })),
+         className: `flex-1 py-2 rounded-xl text-sm font-bold ${form.sleepEvent==='lefekves'?'ta':'ti'}`
+        }, '🛌 ' + window.t('Lefekvés')),
+        h('button', {
+         type: 'button',
+         onClick: () => setForm(p => ({
+          ...p,
+          sleepEvent: 'ebredes'
+         })),
+         className: `flex-1 py-2 rounded-xl text-sm font-bold ${form.sleepEvent==='ebredes'?'ta':'ti'}`
+        }, '☀️ ' + window.t('Ébredés'))
+       )
+      ),
+      h('div', null,
+       h('label', {
+        className: 'text-sm font-bold text-gray-500 block mb-1'
+       }, '📝 ' + window.t('Jegyzet')),
+       h('textarea', {
+        value: form.notes || '',
+        rows: 2,
+        onChange: e => setForm(p => ({
+         ...p,
+         notes: e.target.value
+        })),
+        className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
+       })
+      ),
+      h('div', {
+        className: 'flex gap-3 pt-2'
+       },
+       h('button', {
+        type: 'submit',
+        className: 'flex-1 font-black text-white py-3 rounded-2xl',
+        style: {
+         background: 'linear-gradient(135deg,var(--hbc-c1,#4f46e5),var(--hbc-c2,#7c3aed))'
+        }
+       }, '✅ ' + window.t('Mentés')),
+       h('button', {
+        type: 'button',
+        onClick: onCancel,
+        className: 'px-6 py-3 border-2 border-gray-200 font-bold rounded-2xl'
+       }, '❌')
+      )
+     )
+    )
+   )
+  );
+ }
  /* v14 MOBIL JAVÍTÁS: a korábbi „flex items-center + overflow" kombináció miatt a
     hosszú űrlap teteje-alja mobilon kilógott és nem volt visszagörgethető.
     Új szerkezet: a KÜLSŐ réteg görget, a belső min-height:100% réteg felülre
@@ -9197,7 +9701,7 @@ function EditModal({
        }),
        className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
       },
-      h('option', null, 'Étkezés'), h('option', null, 'Kontroll'), h('option', null, 'Lantus'), h('option', null, 'Egyéb tevékenység'))),
+      h('option', { value: 'Étkezés' }, 'Étkezés'), h('option', { value: 'Kontroll' }, 'Kontroll'), h('option', { value: 'Lantus' }, 'Lantus'), h('option', { value: 'Egyéb tevékenység' }, 'Egyéb tevékenység'))),
     h('div', null, h('label', {
       className: 'text-sm font-bold text-gray-500 block mb-1'
      }, window.bgL('🩸 Vércukor')),
@@ -9563,10 +10067,10 @@ function EditModal({
      weatherErr && h('p', { className: 'text-xs text-red-500 mt-1' }, '⚠️ ' + window.t(weatherErr)),
      actProfile && actPct !== 0 && h('p', {
       className: 'text-xs font-bold text-purple-700 mt-2'
-     }, `${actPct > 0 ? '+' : ''}${actPct}% ${window.t('korrigálva')}: ${actProfile.name}` + (form.weatherTemp !== '' && form.weatherTemp != null ? ` (${form.weatherTemp}°C)` : '')),
+     }, `${actPct > 0 ? '+' : ''}${actPct}% ${window.t('korrigálva')}: ${window.t(actProfile.name)}` + (form.weatherTemp !== '' && form.weatherTemp != null ? ` (${form.weatherTemp}°C)` : '')),
      actProfile && actProfile.extraCH && h('p', {
       className: 'text-xs text-amber-700 mt-1 p-2 bg-amber-50 rounded-xl border border-amber-200'
-     }, '🍭 ' + window.t('Javasolt extra CH') + ': ' + actProfile.extraCH),
+     }, '🍭 ' + window.t('Javasolt extra CH') + ': ' + window.t(actProfile.extraCH)),
      h('p', {
       className: 'text-[10px] text-gray-400 mt-1'
      }, window.t('A módosítás csak ezt a bejegyzést érinti — a bólusjavaslat a felviteli pillanatban rögzült, azt ez a korrekció nem számolja újra.'))
@@ -12186,6 +12690,11 @@ function App() {
  const [allFoods, setAllFoods] = useState(INIT_FOODS);
  const [editingEntry, setEditingEntry] = useState(null);
  const [viewingEntry, setViewingEntry] = useState(null); /* v14: követő részletnézet (szem ikon) */
+ /* v20.6 (Feladat 3, Zoltán kérésére): a Bejegyzések oldal strukturált szűrője
+    itt "tárolódik" App-szinten (amíg be van kapcsolva a "Hozzáadás a
+    Riporthoz"), hogy a Statisztika oldal Orvosi riportja is elérje — l.
+    EntriesList onReportFilterChange és Statistics reportFilter propját. */
+ const [reportFilter, setReportFilter] = useState(null);
  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
  const [modal, setModal] = useState(null);
  const [followerData, setFollowerData] = useState(null); /* v7: követő mód adatai */
@@ -12462,6 +12971,28 @@ function App() {
     showToast('📝 ' + dCount + '. ' + (window.HBC_I18N.getLang() === 'en' ? 'entry today — keep it up!' : 'mai bejegyzés — csak így tovább!'));
    }
   }
+ };
+ /* v20.6 (Feladat 2, Zoltán kérésére): egy koppintásos Alvás-napló — Lefekvés/
+    Ébredés azonnali rögzítése, jelenlegi idővel, form nélkül. Szándékosan NEM
+    az addEntry()-t hívja (az a hipo-riasztás/motivációs üzenet logikáját is
+    futtatná, ami Alvás-bejegyzésnél nem releváns) — helyette saját, rövid
+    visszajelzést ad. */
+ const quickLogSleep = eventKind => {
+  const e = {
+   type: 'Alvás',
+   sleepEvent: eventKind,
+   timestamp: nowLocalDT(),
+   notes: ''
+  };
+  saveEntries([{
+   ...e,
+   id: Date.now(),
+   _mod: Date.now()
+  }, ...entries]);
+  const isEn = window.HBC_I18N.getLang() === 'en';
+  showToast(eventKind === 'ebredes' ?
+   (isEn ? '☀️ Wake-up logged!' : '☀️ Ébredés rögzítve!') :
+   (isEn ? '🛌 Bedtime logged!' : '🛌 Lefekvés rögzítve!'));
  };
  const updateEntry = u => {
   saveEntries(entries.map(e => e.id === u.id ? {
@@ -12877,7 +13408,9 @@ function App() {
     onNoteSave: followerMode ? null : (entry, txt) => updateEntry({
      ...entry,
      notes: txt
-    })
+    }),
+    /* v20.6 (Feladat 2, Zoltán kérésére): Alvás gyorsgombok — követő módban nincsenek (csak olvasás) */
+    onQuickSleep: followerMode ? null : quickLogSleep
    }),
    view === 'charts' && h(Charts, {
     entries: effEntries,
@@ -12899,7 +13432,10 @@ function App() {
     onDelete: followerMode ? () => {} : deleteEntry,
     /* v19.1: Tulajdonos módban is elérhető külön "szem" gomb (lásd Dashboard) */
     onView: followerMode ? null : setViewingEntry,
-    settings: effSettings
+    settings: effSettings,
+    /* v20.6 (Feladat 3, Zoltán kérésére): a "Hozzáadás a Riporthoz" kapcsoló
+       csak Tulajdonos módban elérhető — a Követő nem küld orvosi riportot */
+    onReportFilterChange: followerMode ? null : setReportFilter
    }),
    view === 'stats' && h(Statistics, {
     entries: effEntries,
@@ -12907,7 +13443,10 @@ function App() {
     /* v15: az orvos-címlista mindig a SAJÁT (helyi) settings-ből jön */
     docEmails: (settings && settings.doctorEmails) || [],
     onSaveDocEmails: saveDocEmails,
-    onSaveActCfg: saveActAnalysisCfg
+    onSaveActCfg: saveActAnalysisCfg,
+    /* v20.6 (Feladat 3, Zoltán kérésére): a Bejegyzések oldalon aktivált szűrt
+       nézet (ha van) — a riport kiegészítő szakaszához */
+    reportFilter
    }),
    view === 'foods' && h(FoodManager, {
     allFoods,

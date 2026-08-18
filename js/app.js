@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '20.9';
+const APP_VERSION = '20.10';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -4394,7 +4394,9 @@ function Dashboard({
  settings,
  onAdd,
  onNoteSave, /* v15: a Legutóbbi vércukor kártya megjegyzése a bejegyzésbe mentődik; követőnél null (csak olvasás) */
- onQuickSleep /* v20.6 (Feladat 2, Zoltán kérésére): egy koppintásos Alvás-napló (Lefekvés/Ébredés); követőnél null */
+ onQuickSleep, /* v20.6 (Feladat 2, Zoltán kérésére): egy koppintásos Alvás-napló (Lefekvés/Ébredés); követőnél null */
+ onQuickPihi, /* v20.10 (Feladat 2, Zoltán kérésére): kétkoppintásos "Pihi" napló; követőnél null */
+ pihiStart /* v20.10: a folyamatban lévő Pihi kezdő időpontja, vagy null */
 }) {
  const [editingNote, setEditingNote] = useState(false);
  const [noteInput, setNoteInput] = useState('');
@@ -4881,7 +4883,10 @@ function Dashboard({
      priorítással, mint kérte. Egy koppintás = azonnali rögzítés (jelenlegi
      idővel, űrlap nélkül); a pontos idő utólag az EditModal Alvás-ágában
      javítható (l. onEdit → EditModal, entry.type === 'Alvás'). Követő módban
-     (onQuickSleep null) csak az utolsó állapot látszik, gombok nélkül. */
+     (onQuickSleep null) csak az utolsó állapot látszik, gombok nélkül.
+     v20.10 (Zoltán jelzése): a gombsor sorrendje ÉBREDÉS → PIHI → LEFEKVÉS,
+     a nap tényleges kronológiáját követve (reggel ébredünk, este fekszünk le
+     — a Pihi a kettő között, napközben történik). */
   (onQuickSleep || sleepInfo) && h('div', {
     className: 'rounded-2xl bg-teal-50 border-2 border-teal-200 shadow-sm p-4'
    },
@@ -4897,19 +4902,29 @@ function Dashboard({
     window.t('Elalvás') + ': ' + fmtDur(sleepInfo.durationMin) + ' (' + fmtTime(sleepInfo.prev.timestamp) + '–' + fmtTime(sleepInfo.last.timestamp) + ')' :
     window.t('Utolsó') + ': ' + (sleepInfo.last.sleepEvent === 'ebredes' ? '☀️ ' + window.t('Ébredés') : '🛌 ' + window.t('Lefekvés')) + ' · ' + fmtAlwaysDT(sleepInfo.last.timestamp))
    ),
+   /* v20.10 (Feladat 2): a folyamatban lévő Pihi jelzése — csak akkor
+      látszik, ha az első koppintás megtörtént, a második még nem. */
+   pihiStart && h('p', {
+     className: 'text-xs text-teal-600 font-semibold mb-2'
+    }, '😴 ' + window.t('Pihi folyamatban') + ' – ' + fmtTime(pihiStart)),
    onQuickSleep && h('div', {
      className: 'flex gap-2'
     },
     h('button', {
      type: 'button',
-     onClick: () => onQuickSleep('lefekves'),
-     className: 'flex-1 py-2 rounded-xl text-sm font-bold bg-teal-100 text-teal-700 hbc-hover-bg-teal-200'
-    }, '🛌 ' + window.t('Lefekvés')),
-    h('button', {
-     type: 'button',
      onClick: () => onQuickSleep('ebredes'),
      className: 'flex-1 py-2 rounded-xl text-sm font-bold bg-teal-100 text-teal-700 hbc-hover-bg-teal-200'
-    }, '☀️ ' + window.t('Ébredés'))
+    }, '☀️ ' + window.t('Ébredés')),
+    onQuickPihi && h('button', {
+     type: 'button',
+     onClick: onQuickPihi,
+     className: 'flex-1 py-2 rounded-xl text-sm font-bold bg-teal-100 text-teal-700 hbc-hover-bg-teal-200'
+    }, pihiStart ? ('⏹️ ' + window.t('Pihi vége')) : ('😴 ' + window.t('Pihi'))),
+    h('button', {
+     type: 'button',
+     onClick: () => onQuickSleep('lefekves'),
+     className: 'flex-1 py-2 rounded-xl text-sm font-bold bg-teal-100 text-teal-700 hbc-hover-bg-teal-200'
+    }, '🛌 ' + window.t('Lefekvés'))
    )
   ),
 
@@ -12699,6 +12714,15 @@ function App() {
  const [modal, setModal] = useState(null);
  const [followerData, setFollowerData] = useState(null); /* v7: követő mód adatai */
  const [toast, setToast] = useState(null); /* v7 UX: rövid pozitív visszajelzés */
+ /* v20.10 (Feladat 2, Zoltán kérésére): "Pihi" gyorsgomb — kétlépéses indítás/
+    befejezés. A folyamatban lévő Pihi kezdő időpontja localStorage-ban él túl
+    (nem App-state-ben), hogy oldal-újratöltés/tab-váltás közben se vesszen el;
+    lazy-init a mountkor egyszer olvassa be. */
+ const [pihiStart, setPihiStartState] = useState(() => localStorage.getItem('hbc-pihi-start') || null);
+ const setPihiStart = v => {
+  if (v) localStorage.setItem('hbc-pihi-start', v); else localStorage.removeItem('hbc-pihi-start');
+  setPihiStartState(v);
+ };
  const [menuOpen, setMenuOpen] = useState(false); /* v9: mobil hamburger menü */
  const [headerH, setHeaderH] = useState(64); /* v10: mért fejléc-magasság — a menü ez alatt nyílik */
  const headerRef = useRef(null);
@@ -12993,6 +13017,46 @@ function App() {
   showToast(eventKind === 'ebredes' ?
    (isEn ? '☀️ Wake-up logged!' : '☀️ Ébredés rögzítve!') :
    (isEn ? '🛌 Bedtime logged!' : '🛌 Lefekvés rögzítve!'));
+ };
+ /* v20.10 (Feladat 2, Zoltán kérésére): "Pihi" gyorsgomb — a nap közbeni,
+    tervezetlen pihenés/szundi kétkoppintásos rögzítése. Első koppintás
+    elmenti a kezdő időpontot (pihiStart), MÉG NEM hoz létre bejegyzést.
+    Második koppintás — a MÁR meglévő "Egyéb tevékenység" mechanizmust
+    újrahasznosítva (Zoltán döntése alapján) — 'Egyéb tevékenység' típusú,
+    'Pihi' nevű bejegyzést hoz létre a két időpont közötti -tól-ig
+    tartománnyal, activityDur-t is kiszámolva. Így a régről is meglévő,
+    kézzel "Pihi" néven felvitt tevékenység-bejegyzésekkel AUTOMATIKUSAN
+    egybefésülődik a meglévő "Szűrés tevékenység nevére" szűrőn és a
+    statisztikákon keresztül — nincs szükség új típusra/szűrőre. Az
+    eredmény egy teljesen normál bejegyzés, tehát utólag a ceruzával
+    (EditModal) szabadon korrigálható, ahogy Zoltán kérte. */
+ const quickTogglePihi = () => {
+  const isEn = window.HBC_I18N.getLang() === 'en';
+  if (!pihiStart) {
+   setPihiStart(nowLocalDT());
+   showToast(isEn ? '😴 Nap started!' : '😴 Pihi elkezdve!');
+   return;
+  }
+  const from = pihiStart;
+  const to = nowLocalDT();
+  const dur = Math.max(0, diffMinsLocalDT(from, to));
+  const e = {
+   type: 'Egyéb tevékenység',
+   activity: 'Pihi',
+   activityDur: dur,
+   activityFrom: from,
+   activityTo: to,
+   activityLevel: 0,
+   timestamp: to,
+   notes: ''
+  };
+  saveEntries([{
+   ...e,
+   id: Date.now(),
+   _mod: Date.now()
+  }, ...entries]);
+  setPihiStart(null);
+  showToast((isEn ? '😴 Nap logged: ' : '😴 Pihi rögzítve: ') + fmtDur(dur));
  };
  const updateEntry = u => {
   saveEntries(entries.map(e => e.id === u.id ? {
@@ -13410,7 +13474,10 @@ function App() {
      notes: txt
     }),
     /* v20.6 (Feladat 2, Zoltán kérésére): Alvás gyorsgombok — követő módban nincsenek (csak olvasás) */
-    onQuickSleep: followerMode ? null : quickLogSleep
+    onQuickSleep: followerMode ? null : quickLogSleep,
+    /* v20.10 (Feladat 2, Zoltán kérésére): "Pihi" gyorsgomb — követő módban nincs */
+    onQuickPihi: followerMode ? null : quickTogglePihi,
+    pihiStart: pihiStart
    }),
    view === 'charts' && h(Charts, {
     entries: effEntries,

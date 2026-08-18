@@ -365,6 +365,14 @@ input[type=range]{padding:0;border:none;background:transparent}
 [data-hbc-dark] .bg-emerald-100.text-emerald-700{background-color:#d1fae5!important;color:#047857!important}
 [data-hbc-dark] .bg-emerald-100.text-emerald-700:hover{background-color:#a7f3d0!important}
 
+/* ═══════════ v20.10 FIX (Feladat 3, Zoltán jelzése) — ALVÁS-CSEMPE GOMBJAI SÖTÉT MÓDBAN ═══════════
+   Az Alvás-csempe gyorsgombjai (Ébredés/Pihi/Lefekvés) világos teal
+   hátterűek, de sötét módban a felirat is világosra váltott → olvashatatlan
+   volt. Ugyanaz a hiba/megoldás, mint a CH-táblázat gombjainál fentebb:
+   sötét módban is a világos módbeli színpár marad. */
+[data-hbc-dark] .bg-teal-100.text-teal-700{background-color:#ccfbf1!important;color:#0f766e!important}
+[data-hbc-dark] .bg-teal-100.text-teal-700:hover{background-color:#99f6e4!important}
+
 /* ═══════════ v18 — NAGY BETŰS MÓD (6.7) ═══════════
    A html.hbc-bigfont osztályt az App kapcsolja a Beállítások szerint.
    A rem-alapú méretek automatikusan követik a gyökér betűméretet. */

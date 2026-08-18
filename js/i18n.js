@@ -616,6 +616,10 @@ window.HBC_I18N = (function() {
   'Ébredés': 'Wake-up',
   'Elalvás': 'Sleep duration',
   'Utolsó': 'Last',
+  // ═══ v20.10 (Feladat 2, Zoltán kérésére): Pihi gyorsgomb ═══
+  'Pihi': 'Nap',
+  'Pihi vége': 'End nap',
+  'Pihi folyamatban': 'Nap in progress',
   'Bejegyzés szerkesztése': 'Edit entry',
   'Időpont (utólag is módosítható!)': 'Time (can be changed later!)',
   'Jegyzet': 'Note',

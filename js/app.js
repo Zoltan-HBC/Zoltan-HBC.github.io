@@ -3382,7 +3382,7 @@ const INIT_FOODS = [{
 ];
 
 /* ═══════════ v12: KÖZPONTI VERZIÓSZÁM — minden felirat (fejléc, riport, export) ebből él ═══════════ */
-const APP_VERSION = '20.10';
+const APP_VERSION = '20.11';
 
 // ═══════════ REACT SHORTHAND ═══════════
 const {
@@ -4267,6 +4267,14 @@ function EntryCard({
    bg: 'bg-gray-200 text-gray-700',
    text: '🔒 ' + window.t('Privát')
   }),
+  /* v20.11 (Feladat 2, Zoltán kérésére): csak a Megjegyzés privát — külön
+     jelzés a Tulajdonosnak, hogy emlékeztesse: a jegyzet a Követő elől
+     rejtve van, a bejegyzés többi része viszont nem. */
+  entry.notesPrivate && h(Badge, {
+   key: 'notepriv',
+   bg: 'bg-gray-200 text-gray-700',
+   text: '🔒📝 ' + window.t('Megjegyzés privát')
+  }),
   /* v19: aktivitás/hőség profil — a mentéskor rögzített név + % (nem a jelenlegi
      Beállítások-beli profil, ami időközben módosulhatott/törlődhetett) */
   entry.activityProfileId && entry.activityProfilePct ? h(Badge, {
@@ -4895,11 +4903,15 @@ function Dashboard({
     },
     h('p', {
      className: 'text-sm font-bold text-teal-700'
-    }, '😴 ' + window.t('Alvás')),
+    }, /* v20.11 (Feladat 1, Zoltán kérésére): a csempe címe "Esti alvás" —
+        elkülönítve a napközbeni "Pihi"-től; a v14 "Alvás" i18n-kulcs
+        (entry.type érték, szűrő-opció) VÁLTOZATLAN marad, ez itt egy
+        önálló, csak a csempe-címhez tartozó új kulcs. */
+    '😴 ' + window.t('Esti alvás')),
     sleepInfo && h('p', {
      className: 'text-xs text-teal-600 font-semibold'
     }, sleepInfo.durationMin != null ?
-    window.t('Elalvás') + ': ' + fmtDur(sleepInfo.durationMin) + ' (' + fmtTime(sleepInfo.prev.timestamp) + '–' + fmtTime(sleepInfo.last.timestamp) + ')' :
+    window.t('Esti fekvés/alvás') + ': ' + fmtDur(sleepInfo.durationMin) + ' (' + fmtTime(sleepInfo.prev.timestamp) + '–' + fmtTime(sleepInfo.last.timestamp) + ')' :
     window.t('Utolsó') + ': ' + (sleepInfo.last.sleepEvent === 'ebredes' ? '☀️ ' + window.t('Ébredés') : '🛌 ' + window.t('Lefekvés')) + ' · ' + fmtAlwaysDT(sleepInfo.last.timestamp))
    ),
    /* v20.10 (Feladat 2): a folyamatban lévő Pihi jelzése — csak akkor
@@ -8105,6 +8117,7 @@ function AddEntry({
   activityTo: null, /* v18.6: pontos befejezés (ha felülírva) */
   activityLevel: 0,
   private: false,
+  notesPrivate: false, /* v20.11 (Feladat 2): csak a Megjegyzés privát */
   fatProt: false, /* v18 (6.3): zsíros/fehérjedús étel jelölés */
   /* v19: aktivitás/hőség profil — melyik lett kiválasztva + a mentéskor ténylegesen
      alkalmazott %, hőmérséklet és annak forrása (a profil utólagos szerkesztése/törlése
@@ -8393,6 +8406,7 @@ function AddEntry({
    activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
    private: !!form.private, /* v20 (feladat 2): privát MINDEN bejegyzés-típusnál */
+   notesPrivate: !!form.notesPrivate, /* v20.11 (Feladat 2): csak a Megjegyzés privát */
    /* v19: aktivitás/hőség profil — csak a CH-alapú bólusnál értelmezett; a
       ténylegesen alkalmazott % MENTÉSKOR rögzül (a profil későbbi szerkesztése/
       törlése a már mentett bejegyzést nem módosítja visszamenőleg). */
@@ -8457,7 +8471,10 @@ function AddEntry({
        }),
        className: 'w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400'
       },
-      h('option', { value: 'Étkezés' }, 'Étkezés'), h('option', { value: 'Kontroll' }, 'Kontroll'), h('option', { value: 'Lantus' }, 'Lantus'), h('option', { value: 'Egyéb tevékenység' }, 'Egyéb tevékenység')))
+      /* v20.11 (Feladat 3, Zoltán kérésére): alap sorrend — Kontroll,
+         Étkezés, Egyéb tevékenység, Lantus. (Csak az "Új bejegyzés" űrlap
+         — a Bejegyzés szerkesztése ugyanezen legördülője változatlan.) */
+      h('option', { value: 'Kontroll' }, 'Kontroll'), h('option', { value: 'Étkezés' }, 'Étkezés'), h('option', { value: 'Egyéb tevékenység' }, 'Egyéb tevékenység'), h('option', { value: 'Lantus' }, 'Lantus')))
    ),
 
    form.type === 'Étkezés' && h('div', null,
@@ -9039,6 +9056,27 @@ function AddEntry({
     }),
     '🔒 ' + window.t('Privát bejegyzés (a Követő egyáltalán nem látja)')),
 
+   /* v20.11 (Feladat 2, Zoltán kérésére): a "Privát" gomb kettéosztása —
+      ez a MÁSODIK, önálló jelölőnégyzet csak a Megjegyzés szövegét rejti
+      a Követő elől, maga a bejegyzés (a többi mezővel együtt) továbbra is
+      látható marad neki. Szándékosan FÜGGETLEN a fenti teljes-bejegyzés
+      "private" jelölőtől (Zoltán jóváhagyása alapján) — így a két jelölő
+      bármikor, egymástól függetlenül át- és visszaállítható, korábban már
+      rögzített bejegyzéseknél is (szerkesztéssel). */
+   h('label', {
+     className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 hbc-cursor-pointer'
+    },
+    h('input', {
+     type: 'checkbox',
+     checked: !!form.notesPrivate,
+     onChange: e => setForm({
+      ...form,
+      notesPrivate: e.target.checked
+     }),
+     className: 'w-5 h-5 hbc-accent-gray'
+    }),
+    '🔒📝 ' + window.t('Csak a Megjegyzés priváttá tétele (a bejegyzés többi része továbbra is látszik a Követőnek)')),
+
    h('div', {
      className: 'flex gap-3'
     },
@@ -9255,7 +9293,8 @@ function EditModal({
    activityFrom: entry.activityFrom ? entry.activityFrom.slice(0, 16) : null, /* v18.6 */
    activityTo: entry.activityTo ? entry.activityTo.slice(0, 16) : null, /* v18.6 */
    activityLevel: parseInt(entry.activityLevel) || 0,
-   private: !!entry.private
+   private: !!entry.private,
+   notesPrivate: !!entry.notesPrivate /* v20.11 (Feladat 2): csak a Megjegyzés privát */
   };
  });
  const [showPicker, setShowPicker] = useState(false);
@@ -9507,6 +9546,7 @@ function EditModal({
    activityTo: (_hasAct && form.activityTo) ? form.activityTo : null,
    activityLevel: _hasAct ? (parseInt(form.activityLevel) || 0) : 0,
    private: !!form.private, /* v20 (feladat 2): privát MINDEN bejegyzés-típusnál */
+   notesPrivate: !!form.notesPrivate, /* v20.11 (Feladat 2): csak a Megjegyzés privát */
    /* v19.3 (feladat 2): testsúly — bármely bejegyzéstípusnál rögzíthető/szerkeszthető */
    weight: (form.weight !== '' && form.weight != null) ? parseFloat(form.weight) : null,
    /* v20 (feladat 5): aktivitás/hőség profil + hőmérséklet utólag is szerkeszthető —
@@ -10198,6 +10238,25 @@ function EditModal({
       className: 'w-5 h-5 hbc-accent-gray'
      }),
      '🔒 ' + window.t('Privát bejegyzés (a Követő egyáltalán nem látja)')),
+    /* v20.11 (Feladat 2, Zoltán kérésére): a "Privát" gomb kettéosztása —
+       ez a MÁSODIK, önálló jelölőnégyzet csak a Megjegyzés szövegét rejti
+       a Követő elől, maga a bejegyzés továbbra is látható marad neki.
+       Szándékosan FÜGGETLEN a fenti teljes-bejegyzés "private" jelölőtől,
+       hogy egy korábban már Priváttá tett bejegyzés is szabadon átállítható/
+       finomítható legyen szerkesztéskor. */
+    h('label', {
+      className: 'flex items-center gap-2 text-sm font-bold text-gray-600 p-2 bg-gray-50 rounded-xl border border-gray-200 hbc-cursor-pointer'
+     },
+     h('input', {
+      type: 'checkbox',
+      checked: !!form.notesPrivate,
+      onChange: e => setForm({
+       ...form,
+       notesPrivate: e.target.checked
+      }),
+      className: 'w-5 h-5 hbc-accent-gray'
+     }),
+     '🔒📝 ' + window.t('Csak a Megjegyzés priváttá tétele (a bejegyzés többi része továbbra is látszik a Követőnek)')),
     h('div', {
       className: 'flex gap-3 pt-2'
      },
@@ -12844,8 +12903,16 @@ function App() {
     v14 (korrekció): a fejléc FELIRATA (becenév) az effSettings-ből jön; a színtéma,
     háttér és sötét mód a Követő saját beállítása marad. */
  /* v14: kettős biztosítás — privát bejegyzés követőnél akkor sem jelenik meg,
-    ha régebbi gyorsítótárból érkezne */
- const effEntries = (followerMode && followerData && Array.isArray(followerData.entries)) ? followerData.entries.filter(e => !(e && e.private)) : entries;
+    ha régebbi gyorsítótárból érkezne
+    v20.11 (Feladat 2, Zoltán kérésére): a teljesen privát bejegyzések
+    továbbra is KIMARADNAK a Követő nézetéből (.filter); az újonnan
+    bevezetett, csak-a-Megjegyzést-privatizáló bejegyzések viszont MARADNAK
+    láthatók, csupán a notes mezőjük ürül ki a Követőnek átadott másolatban
+    (.map) — a Tulajdonos saját nézete (entries, unfiltered) ettől nem
+    érintett, ott minden mindig teljes egészében látszik. */
+ const effEntries = (followerMode && followerData && Array.isArray(followerData.entries)) ?
+  followerData.entries.filter(e => !(e && e.private)).map(e => (e && e.notesPrivate) ? { ...e, notes: '' } : e) :
+  entries;
  const effSettings = (followerMode && followerData && followerData.settings) ? {
   ...DEFAULT_SETTINGS,
   ...followerData.settings,

@@ -491,6 +491,9 @@ window.HBC_I18N = (function() {
   'Ha megadod, az app mindig ezzel a fiókkal jelentkezik be — a Google fiókválasztó lista NEM jelenik meg. Az első engedélyezés eszközönként egyszer kézzel történik, utána minden belépés automatikus. Mobilon és asztali gépen is működik.': 'If provided, the app always signs in with this account — the Google account picker list does NOT appear. The first authorisation is done manually once per device; every later sign-in is automatic. Works on mobile and desktop alike.',
   'Privát': 'Private',
   'Privát bejegyzés (a Követő egyáltalán nem látja)': 'Private entry (completely hidden from the Follower)',
+  // ═══ v20.11 (Feladat 2, Zoltán kérésére): "Privát" gomb kettéosztása — csak a Megjegyzés privát ═══
+  'Csak a Megjegyzés priváttá tétele (a bejegyzés többi része továbbra is látszik a Követőnek)': 'Make only the Note private (the rest of the entry stays visible to the Follower)',
+  'Megjegyzés privát': 'Note private',
   'Bejegyzés részletei (megtekintés)': 'Entry details (view only)',
   'Részletek megtekintése': 'View details',
   'Jegyzetek': 'Notes',
@@ -620,6 +623,9 @@ window.HBC_I18N = (function() {
   'Pihi': 'Nap',
   'Pihi vége': 'End nap',
   'Pihi folyamatban': 'Nap in progress',
+  // ═══ v20.11 (Feladat 1, Zoltán kérésére): Alvás-csempe cím pontosítása ═══
+  'Esti alvás': 'Night sleep',
+  'Esti fekvés/alvás': 'Night bedtime/sleep',
   'Bejegyzés szerkesztése': 'Edit entry',
   'Időpont (utólag is módosítható!)': 'Time (can be changed later!)',
   'Jegyzet': 'Note',
